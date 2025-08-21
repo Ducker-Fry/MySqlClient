@@ -2,6 +2,7 @@
 #include <sstream>
 #include <iomanip>
 
+
 DataTable::DataTable(const std::vector<std::string>& columnNames)
 {
     for (const auto& name : columnNames)
@@ -49,7 +50,7 @@ bool DataTable::addColumn(const std::string& columnName)
     return true;
 }
 
-bool DataTable::addRow(const std::vector<std::any>& rowData)
+bool DataTable::addRow(const std::vector<ValueType>& rowData)
 {
     // 行数据的列数必须与表格列数一致
     if (rowData.size() != columns.size())
@@ -70,7 +71,7 @@ bool DataTable::addRow(const DataRow& dataRow)
 
 }
 
-const std::any& DataTable::getValue(size_t rowIndex, size_t columnIndex) const
+const ValueType& DataTable::getValue(size_t rowIndex, size_t columnIndex) const
 {
     if (rowIndex >= rows.size())
     {
@@ -85,7 +86,7 @@ const std::any& DataTable::getValue(size_t rowIndex, size_t columnIndex) const
     return rows[rowIndex][columnIndex];
 }
 
-const std::any& DataTable::getValue(size_t rowIndex, const std::string& columnName) const
+const ValueType& DataTable::getValue(size_t rowIndex, const std::string& columnName) const
 {
     auto it = columnIndices.find(columnName);
     if (it == columnIndices.end())
@@ -96,7 +97,7 @@ const std::any& DataTable::getValue(size_t rowIndex, const std::string& columnNa
     return getValue(rowIndex, it->second);
 }
 
-bool DataTable::setValue(size_t rowIndex, size_t columnIndex, const std::any& value)
+bool DataTable::setValue(size_t rowIndex, size_t columnIndex, const ValueType& value)
 {
     if (rowIndex >= rows.size() || columnIndex >= columns.size())
     {
@@ -107,7 +108,7 @@ bool DataTable::setValue(size_t rowIndex, size_t columnIndex, const std::any& va
     return true;
 }
 
-bool DataTable::setValue(size_t rowIndex, const std::string& columnName, const std::any& value)
+bool DataTable::setValue(size_t rowIndex, const std::string& columnName, const ValueType& value)
 {
     auto it = columnIndices.find(columnName);
     if (it == columnIndices.end())
@@ -132,7 +133,7 @@ const std::string& DataTable::getTableName() const
     return tableName;
 }
 
-const std::vector<std::any>& DataTable::getRow(size_t rowIndex) const
+const std::vector<ValueType>& DataTable::getRow(size_t rowIndex) const
 {
     if (rowIndex >= rows.size())
     {
@@ -140,6 +141,11 @@ const std::vector<std::any>& DataTable::getRow(size_t rowIndex) const
     }
 
     return rows[rowIndex];
+}
+
+std::vector<std::vector<ValueType>> DataTable::getRows() const
+{
+    return rows;
 }
 
 void DataTable::clear()
@@ -171,7 +177,7 @@ DataTable DataTable::selectColumns(const std::vector<std::string>& selectedColum
     // 复制选中列的数据
     for (size_t i = 0; i < getRowCount(); ++i)
     {
-        std::vector<std::any> newRow;
+        std::vector<ValueType> newRow;
         for (const auto& col : selectedColumns)
         {
             newRow.push_back(getValue(i, col));

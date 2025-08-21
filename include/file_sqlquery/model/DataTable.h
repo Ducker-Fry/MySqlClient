@@ -5,9 +5,10 @@
 #include <variant>
 #include <vector>
 #include <unordered_map>
-#include <any>
 #include <stdexcept>
 
+// 定义支持的数据类型变体
+using ValueType = std::variant<int, double, bool, std::string, std::nullptr_t>;
 class DataRow; // 前向声明
 
 class DataTable
@@ -22,9 +23,10 @@ private:
     // 列名到索引的映射，用于快速查找
     std::unordered_map<std::string, size_t> columnIndices;
     // 存储数据行，每行是一个值的集合
-    std::vector<std::vector<std::any>> rows;
+    std::vector<std::vector<ValueType>> rows;
 
 public:
+
     // 构造函数
     DataTable() = default;
     explicit DataTable(const std::vector<std::string>& columnNames);
@@ -45,16 +47,16 @@ public:
     bool addColumn(const std::string& columnName);
 
     // 添加行（必须与列数匹配）
-    bool addRow(const std::vector<std::any>& rowData);
+    bool addRow(const std::vector<ValueType>& rowData);
     bool addRow(const DataRow& dataRow);
 
     // 获取指定单元格的值
-    const std::any& getValue(size_t rowIndex, size_t columnIndex) const;
-    const std::any& getValue(size_t rowIndex, const std::string& columnName) const;
+    const ValueType& getValue(size_t rowIndex, size_t columnIndex) const;
+    const ValueType& getValue(size_t rowIndex, const std::string& columnName) const;
 
     // 设置指定单元格的值
-    bool setValue(size_t rowIndex, size_t columnIndex, const std::any& value);
-    bool setValue(size_t rowIndex, const std::string& columnName, const std::any& value);
+    bool setValue(size_t rowIndex, size_t columnIndex, const ValueType& value);
+    bool setValue(size_t rowIndex, const std::string& columnName, const ValueType& value);
 
     // 设置表名
     void setTableName(const std::string& name);
@@ -63,8 +65,9 @@ public:
     const std::string& getTableName() const;
 
     // 获取整行数据
-    const std::vector<std::any>& getRow(size_t rowIndex) const;
-
+    const std::vector<ValueType>& getRow(size_t rowIndex) const;
+    //获取所有行数据
+    std::vector<std::vector<ValueType>> getRows() const;
     // 清空表格数据
     void clear();
 
