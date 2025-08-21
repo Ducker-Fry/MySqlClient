@@ -15,10 +15,10 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include/file_sqlquery")
 
 # 将源代码添加到此项目的可执行文件。
-add_executable (MySqlClient "src/MySqlClient.cpp" "include/MySqlClient.h" "src/main.cpp" "include/file_sqlquery/core/IDataSource.h" "include/file_sqlquery/core/IQueryEngine.h" "include/file_sqlquery/model/QueryResult.h"  "include/file_sqlquery/model/QueryPlan.h" "src/datasource/CsvDataSource.cpp" "include/file_sqlquery/model/CsvDataSource.h" "src/core/DataTable.cpp" "src/QueryResult.cpp")
+add_executable (app "include/MySqlClient.h" "src/main.cpp" "include/file_sqlquery/core/IDataSource.h" "include/file_sqlquery/core/IQueryEngine.h" "include/file_sqlquery/model/QueryResult.h"  "include/file_sqlquery/model/QueryPlan.h" "src/datasource/CsvDataSource.cpp" "include/file_sqlquery/model/CsvDataSource.h" "src/core/DataTable.cpp" "src/QueryResult.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
-  set_property(TARGET MySqlClient PROPERTY CXX_STANDARD 20)
+  set_property(TARGET app PROPERTY CXX_STANDARD 20)
 endif()
 
 # TODO: 如有需要，请添加测试并安装目标。
