@@ -1,4 +1,6 @@
 #include<model/DataTable.h>
+#include <sstream>
+#include <iomanip>
 
 DataTable::DataTable(const std::vector<std::string>& columnNames)
 {
@@ -59,6 +61,15 @@ bool DataTable::addRow(const std::vector<std::any>& rowData)
     return true;
 }
 
+bool DataTable::addRow(const DataRow& dataRow)
+{
+    if( dataRow.size() != columns.size())
+    {
+        return false;
+    }
+
+}
+
 const std::any& DataTable::getValue(size_t rowIndex, size_t columnIndex) const
 {
     if (rowIndex >= rows.size())
@@ -105,6 +116,20 @@ bool DataTable::setValue(size_t rowIndex, const std::string& columnName, const s
     }
 
     return setValue(rowIndex, it->second, value);
+}
+
+void DataTable::setTableName(const std::string& name)
+{
+    if(name.empty())
+    {
+        throw std::invalid_argument("Table name cannot be empty");
+    }
+    tableName = name;
+}
+
+const std::string& DataTable::getTableName() const
+{
+    return tableName;
 }
 
 const std::vector<std::any>& DataTable::getRow(size_t rowIndex) const
@@ -155,4 +180,69 @@ DataTable DataTable::selectColumns(const std::vector<std::string>& selectedColum
     }
 
     return result;
+}
+
+
+void DataRow::addValue(const ValueType& value)
+{
+    m_values.push_back(value);
+}
+
+const DataRow::ValueType& DataRow::operator[](size_t index) const
+{
+    if (index >= m_values.size())
+    {
+        throw std::out_of_range("DataRow index out of range");
+    }
+    return m_values[index];
+}
+
+size_t DataRow::size() const
+{
+    return m_values.size();
+}
+
+bool DataRow::empty() const
+{
+    return m_values.empty();
+}
+
+void DataRow::clear()
+{
+    m_values.clear();
+}
+
+std::string DataRow::getValueAsString(size_t index) const
+{
+    if (index >= m_values.size())
+    {
+        return "";
+    }
+
+    const auto& value = m_values[index];
+    std::stringstream ss;
+
+    // 根据实际类型转换为字符串
+    if (std::holds_alternative<int>(value))
+    {
+        ss << std::get<int>(value);
+    }
+    else if (std::holds_alternative<double>(value))
+    {
+        ss << std::get<double>(value);
+    }
+    else if (std::holds_alternative<bool>(value))
+    {
+        ss << (std::get<bool>(value) ? "true" : "false");
+    }
+    else if (std::holds_alternative<std::string>(value))
+    {
+        ss << std::get<std::string>(value);
+    }
+    else if (std::holds_alternative<std::nullptr_t>(value))
+    {
+        ss << "NULL";
+    }
+
+    return ss.str();
 }

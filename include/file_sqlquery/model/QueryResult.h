@@ -3,17 +3,7 @@
 #include <string>
 #include <chrono>
 #include <optional>
-
-// 查询类型枚举
-enum class QueryType
-{
-    SELECT,   // 查询操作
-    INSERT,   // 插入操作
-    UPDATE,   // 更新操作
-    DELETE,   // 删除操作
-    DDL,      // 数据定义语言（如CREATE TABLE）
-    UNKNOWN   // 未知类型
-};
+#include<file_sqlquery/QueryType.h>
 
 // 查询结果状态
 enum class ResultStatus
@@ -56,6 +46,7 @@ public:
 
     // 错误信息（仅状态为ERROR时有效）
     const std::string& getErrorMessage() const;
+    void setError(const std::string& errmsg);
 
     // 结果数据（仅SELECT查询有效）
     DataTable& getData();
@@ -76,5 +67,8 @@ public:
 
     // 重置结果（复用对象时使用）
     void reset();
+
+    //设置结果表格
+    void setResultTable(const DataTable& table);
 };
 

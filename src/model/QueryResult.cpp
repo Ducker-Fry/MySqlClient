@@ -72,6 +72,11 @@ const std::string& QueryResult::getErrorMessage() const
     return errorMessage;
 }
 
+void QueryResult::setError(const std::string& errmsg)
+{
+    errorMessage = errmsg;
+}
+
 DataTable& QueryResult::getData()
 {
     return data;
@@ -134,4 +139,9 @@ void QueryResult::reset()
     std::stringstream ss;
     ss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
     timestamp = ss.str();
+}
+
+void QueryResult::setResultTable(const DataTable& table)
+{
+    data.copyFrom(table);
 }
