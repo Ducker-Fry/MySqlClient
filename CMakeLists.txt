@@ -18,12 +18,14 @@ project ("MySqlClient")
 find_package(GTest REQUIRED)
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include/input")
 
 # 收集主程序需要的源文件。
-file(GLOB MAIN_SOURCES "src/*.cpp" "src/io/*.cpp")
+file(GLOB MAIN_SOURCES "src/*.cpp" "src/input/*.cpp")
 file(GLOB  MAIN_HEADERS "include/*.h" "include/*/*.h")
 
 # 收集测试需要的源文件。
+file(GLOB TEST_CONSOLE_SOURCE "tests/test_console_input.cpp"  "src/input/input_console.cpp")
 
 # 设置输出目录
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
@@ -34,12 +36,12 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 add_executable(app ${MAIN_SOURCES} ${MAIN_HEADERS})
 
 # 生成测试可执行文件。
-#add_executable(test_model_app ${TEST_SOURCE} ${TEST_MODEL_SOURCE})
-#target_link_libraries(
-#    test_model_app
-#    PRIVATE GTest::gtest_main
-#    PRIVATE GTest::gtest
-#)
+add_executable(test_console ${TEST_CONSOLE_SOURCE})
+target_link_libraries(
+    test_console
+    PRIVATE GTest::gtest_main
+    PRIVATE GTest::gtest
+)
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET app PROPERTY CXX_STANDARD 20)
@@ -51,4 +53,4 @@ enable_testing()
 # 引入 GoogleTest 提供的测试发现相关功能
 include(GoogleTest)
 # 注册测试用例，让 CMake 能发现测试
-#gtest_discover_tests(test_model_app)
+gtest_discover_tests(test_console)

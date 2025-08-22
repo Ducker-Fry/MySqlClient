@@ -1,13 +1,11 @@
 #include<iostream>
+#include<input/input_console.h>
 
 int main()
 {
-    std::cout << "Hello, World!" << std::endl;
-    // Example usage of QueryResult and DataTable
-    // QueryResult queryResult;
-    // DataTable dataTable;
-    // Assuming QueryResult and DataTable have been defined in the included headers
-    // queryResult.execute("SELECT * FROM table_name");
-    // dataTable.load(queryResult);
+    InputData inputData;
+    ConsoleInputSource consoleInput;
+    inputData = consoleInput.readInput();
+    std::cout << inputData.getRawData() << std::endl;
     return 0;
 }
