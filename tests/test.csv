@@ -1,0 +1,6 @@
+hello,sql,world
+hello,linux,world
+insert,into,table
+delete,from,table
+update,table,set
+select,from,table

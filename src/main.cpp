@@ -1,11 +1,7 @@
 #include<iostream>
-#include<input/input_console.h>
+#include<input/input_file.h>
 
 int main()
 {
-    InputData inputData;
-    ConsoleInputSource consoleInput;
-    inputData = consoleInput.readInput();
-    std::cout << inputData.getRawData() << std::endl;
-    return 0;
+
 }
