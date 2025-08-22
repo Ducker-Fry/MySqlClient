@@ -1,6 +1,8 @@
-hello,sql,world
-hello,linux,world
-insert,into,table
-delete,from,table
-update,table,set
-select,from,table
+name,age,gender
+Alice,30,female
+Bob,25,male
+"Charlie, D.",30,male
+Daniel,18,male
+Eric,26,male
+Sue,12,female
+Helen,22,female

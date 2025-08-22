@@ -16,6 +16,11 @@ std::shared_ptr<IFileParser> FileInputSource::getParser() const
     else return parser->second;
 }
 
+FileInputSource::FileInputSource(const std::string& filePath) : filPath(filePath)
+{
+    registerParser("csv", std::make_shared<CsvFileParser>());
+}
+
 void FileInputSource::registerParser(const std::string& type, std::shared_ptr<IFileParser> parser)
 {
     parsers[type] = parser;
@@ -31,4 +36,11 @@ InputData FileInputSource::readInput()
     inputData.setSourceType("FileInputSource");
 
     return inputData;
+}
+
+std::string FileInputSource::getFileType() const
+{
+    size_t dotPos = filPath.find_last_of('.');
+    if (dotPos == std::string::npos || dotPos == 0) return ""; // No file extension found
+    return filPath.substr(dotPos + 1);
 }

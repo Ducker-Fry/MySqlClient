@@ -26,9 +26,9 @@ public:
 class CsvFileParser : public IFileParser
 {
 private:
-    std::vector<std::string> CsvFileParser::parseCsvLine(const std::string& line, char delimiter, char quoteChar);
-    std::string CsvFileParser::convertToJson(const std::vector<std::vector<std::string>>& csvData);
-    std::string CsvFileParser::escapeJson(const std::string& s);
+    std::vector<std::string> parseCsvLine(const std::string& line, char delimiter, char quoteChar);
+    std::string convertToJson(const std::vector<std::vector<std::string>>& csvData);
+    std::string escapeJson(const std::string& s);
 public:
     std::string parseFile(const std::string& filePath) override;
     std::string getParserType() const override { return "csv"; }

@@ -1,5 +1,6 @@
 #include<input/file_parser.h>
-
+#include<sstream>
+using namespace FileParserUtils;
 std::string FileParserUtils::trim(const std::string& s)
 {
     auto start = s.begin();
@@ -154,5 +155,6 @@ std::string CsvFileParser::parseFile(const std::string & filePath)
     }
 
     // 3. 将结构化数据转换为标准化字符串（示例：JSON格式，便于上层解析）
+    file.close();  // 关闭文件流
     return convertToJson(csvData);
 }
