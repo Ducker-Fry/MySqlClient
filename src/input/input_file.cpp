@@ -33,9 +33,19 @@ InputData FileInputSource::readInput()
     // Create InputData object and set its raw data and source type
     InputData inputData;
     inputData.setRawData(parsedData);
-    inputData.setSourceType("FileInputSource");
+    std::string fileSourceType = getSourceType();
+    inputData.setSourceType(fileSourceType);
 
     return inputData;
+}
+
+std::string FileInputSource::getSourceType() const
+{
+    std::string fileType = getFileType();
+    if (fileType.empty()) return "unknown";
+    else if(fileType == "csv" or fileType == "json" or fileType == "excel") return "json";
+    else if(fileType == "sql") return "sql";
+    else return "unknown";
 }
 
 std::string FileInputSource::getFileType() const

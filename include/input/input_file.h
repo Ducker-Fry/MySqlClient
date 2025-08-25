@@ -20,5 +20,5 @@ public:
     void registerParser(const std::string& type, std::shared_ptr<IFileParser> parser);
 
     InputData readInput() override;
-    std::string getSourceType() const override { return "FileInputSource"; }
+    std::string getSourceType() const override;
 };
