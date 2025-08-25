@@ -7,7 +7,7 @@ int main()
     try
     {
         // 解析文件
-        std::string filePath = std::filesystem::absolute("E:\\Draft\\MySqlClient\\tests\\test.csv").string();
+        std::string filePath = std::filesystem::absolute("E:\\Draft\\MySqlClient\\tests\\test_sql.sql").string();
         FileInputSource fileInputSource(filePath);
         auto Data = fileInputSource.readInput();
         std::cout << "Data :\n" << Data.getRawData() << std::endl;

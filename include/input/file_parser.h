@@ -33,3 +33,17 @@ public:
     std::string parseFile(const std::string& filePath) override;
     std::string getParserType() const override { return "csv"; }
 };
+
+class SqlFileParser : public IFileParser
+{
+private:
+    // 辅助方法：处理SQL文件中的注释、空白行等
+    std::string processSqlContent(const std::string& rawContent);
+
+public:
+    // 解析SQL文件，返回处理后的内容（可根据需求格式化为特定结构）
+    std::string parseFile(const std::string& filePath) override;
+
+    // 返回解析器类型标识
+    std::string getParserType() const override { return "sql"; }
+};

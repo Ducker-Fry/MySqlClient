@@ -19,6 +19,7 @@ std::shared_ptr<IFileParser> FileInputSource::getParser() const
 FileInputSource::FileInputSource(const std::string& filePath) : filPath(filePath)
 {
     registerParser("csv", std::make_shared<CsvFileParser>());
+    registerParser("sql", std::make_shared<SqlFileParser>());
 }
 
 void FileInputSource::registerParser(const std::string& type, std::shared_ptr<IFileParser> parser)

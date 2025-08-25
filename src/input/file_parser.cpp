@@ -158,3 +158,44 @@ std::string CsvFileParser::parseFile(const std::string & filePath)
     file.close();  // 关闭文件流
     return convertToJson(csvData);
 }
+
+//sql文件解析器
+std::string SqlFileParser::processSqlContent(const std::string& rawContent)
+{
+    std::stringstream processed;
+    std::string line;
+    std::istringstream iss(rawContent);
+
+    while (std::getline(iss, line))
+    {
+        // 去除行首尾空白
+        std::string trimmed = FileParserUtils::trim(line);
+
+        // 跳过空行和注释行（-- 开头的单行注释）
+        if (trimmed.empty() || trimmed.substr(0, 2) == "--")
+            continue;
+
+        // 保留有效SQL语句行
+        processed << trimmed << "\n";
+    }
+
+    return processed.str();
+}
+
+std::string SqlFileParser::parseFile(const std::string& filePath)
+{
+    // 使用工具函数打开文件
+    std::fstream file = FileParserUtils::openFile(filePath);
+    if (!file.is_open())
+    {
+        throw std::runtime_error("Failed to open SQL file: " + filePath);
+    }
+
+    // 读取文件全部内容
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string rawContent = buffer.str();
+
+    // 处理内容（过滤注释、空行等）
+    return processSqlContent(rawContent);
+}
