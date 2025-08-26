@@ -19,9 +19,10 @@ find_package(GTest REQUIRED)
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include/input")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include/core")
 
 # 收集主程序需要的源文件。
-file(GLOB MAIN_SOURCES "src/*.cpp" "src/input/*.cpp")
+file(GLOB MAIN_SOURCES "src/*.cpp" "src/input/*.cpp" "src/core/*.cpp")
 file(GLOB  MAIN_HEADERS "include/*.h" "include/*/*.h")
 
 # 收集测试需要的源文件。

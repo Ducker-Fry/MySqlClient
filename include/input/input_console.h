@@ -23,7 +23,7 @@ class ConsoleInputSource : public IInputSource
 {
 public:
     InputData readInput() override;
-    std::string getSourceType() const override { return "Console"; }
+    std::string getSourceType() const override { return "sql"; }
     //测试友元
     static void testFriend(std::string& query);
 private:
