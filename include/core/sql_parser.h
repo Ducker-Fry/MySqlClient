@@ -10,6 +10,8 @@ enum class SqlType
     INSERT,
     UPDATE,
     DELETE,
+    CREATE,
+    DROP,
     UNKNOWN
 };
 
@@ -74,6 +76,8 @@ public:
     SqlParseResultImport() = default;
 };
 
+
+// SQL解析接口
 class ISqlParser
 {
 public:

@@ -27,6 +27,7 @@ file(GLOB  MAIN_HEADERS "include/*.h" "include/*/*.h")
 
 # 收集测试需要的源文件。
 file(GLOB TEST_CONSOLE_SOURCE "tests/test_console_input.cpp"  "src/input/input_console.cpp")
+file(GLOB TEST_SQLQUERY_PARSER_SOURCE "tests/test_sqlquery_parser.cpp"  "src/core/sql_parser.cpp")
 
 # 设置输出目录
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
@@ -43,6 +44,12 @@ target_link_libraries(
     PRIVATE GTest::gtest_main
     PRIVATE GTest::gtest
 )
+add_executable(test_parser ${TEST_SQLQUERY_PARSER_SOURCE})
+target_link_libraries(
+    test_parser
+    PRIVATE GTest::gtest_main
+    PRIVATE GTest::gtest
+)
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET app PROPERTY CXX_STANDARD 20)
@@ -54,4 +61,4 @@ enable_testing()
 # 引入 GoogleTest 提供的测试发现相关功能
 include(GoogleTest)
 # 注册测试用例，让 CMake 能发现测试
-gtest_discover_tests(test_console)
+gtest_discover_tests(test_console test_parser)

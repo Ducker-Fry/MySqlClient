@@ -140,34 +140,29 @@ std::shared_ptr<SqlParseResult> QuerySqlParser::parse(InputData& input)
     std::string db, table;
     extractTableAndDatabase(processedSql, table, db);
     std::string where = extractWhereClause(processedSql);
+    std::string orderBy = extractOrderByClause(processedSql);
+    std::vector<std::string> groupBy = extractGroupByColumns(processedSql);
     std::string limit = extractLimitClause(processedSql);
+    std::string having = extractHavingClause(processedSql);
 
-    // 根据SQL类型处理四类基本MySQL语句
-    if (sqlType == "SELECT") {
+    if(sqlType == "SELECT")
         result.setOperationType(SqlType::SELECT);
-        result.setTable(table);
-        result.setDatabase(db);
-        result.setColumns(extractColumns(processedSql));
-        result.setWhereClause(where);
-        result.setLimitClause(limit);
-    }
-    else if (sqlType == "INSERT") {
+    else if(sqlType == "INSERT")
         result.setOperationType(SqlType::INSERT);
-        result.setTable(table);
-        result.setDatabase(db);
-    }
-    else if (sqlType == "UPDATE") {
+    else if(sqlType == "UPDATE")
         result.setOperationType(SqlType::UPDATE);
-        result.setTable(table);
-        result.setDatabase(db);
-        result.setWhereClause(where);
-    }
-    else if (sqlType == "DELETE") {
+    else if(sqlType == "DELETE")
         result.setOperationType(SqlType::DELETE);
-        result.setTable(table);
-        result.setDatabase(db);
-        result.setWhereClause(where);
-    }
+    else
+        result.setOperationType(SqlType::UNKNOWN);
+
+    result.setTable(table);
+    result.setDatabase(db);
+    result.setColumns(extractColumns(processedSql));
+    result.setWhereClause(where);
+    result.setGroupByColumns(groupBy);
+    result.setHavingClause(having);
+    result.setLimitClause(limit);
 
     return std::make_shared<SqlParseResultQuery>(result);
 }
