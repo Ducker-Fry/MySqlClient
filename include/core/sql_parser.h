@@ -22,6 +22,7 @@ protected:
     std::string type;
 public:
     SqlParseResult() = default;
+    virtual ~SqlParseResult() = default;
 
     // Setter和Getter（方便赋值和测试）
     void setDatabase(const std::string& db) { database = db; }
@@ -29,8 +30,7 @@ public:
     void setColumns(const std::vector<std::string>& cols) { columns = cols; }
     void setType(const std::string& t) { type = t; }
 
-    std::string getDatabase() const { return database; }
-    std::string getTable() const { return table; }
+    std::string getDatabase() const { return database; } std::string getTable() const { return table; }
     std::vector<std::string> getColumns() const { return columns; }
     std::string getType() const { return type; }
 };
@@ -44,7 +44,7 @@ private:
     std::vector<std::string> groupByColumns;
     std::string havingClause;
     std::string rawQuery;
-    std::string operationType; // SELECT, INSERT, UPDATE, DELETE
+    SqlType operationType = SqlType::UNKNOWN; // SELECT, INSERT, UPDATE, DELETE
 public:
     SqlParseResultQuery() = default;
 
@@ -55,7 +55,7 @@ public:
     void setGroupByColumns(const std::vector<std::string>& group) { groupByColumns = group; }
     void setHavingClause(const std::string& having) { havingClause = having; }
     void setRawQuery(const std::string& raw) { rawQuery = raw; }
-    void setOperationType(const std::string& op) { operationType = op; }
+    void setOperationType(SqlType op) { operationType = op; }
 
     std::string getWhereClause() const { return whereClause; }
     std::string getOrderByClause() const { return orderByClause; }
@@ -63,7 +63,7 @@ public:
     std::vector<std::string> getGroupByColumns() const { return groupByColumns; }
     std::string getHavingClause() const { return havingClause; }
     std::string getRawQuery() const { return rawQuery; }
-    std::string getOperationType() const { return operationType; }
+    SqlType getOperationType() const { return operationType ; }
 };
 
 class SqlParseResultImport : public SqlParseResult
@@ -77,7 +77,7 @@ public:
 class ISqlParser
 {
 public:
-    virtual SqlParseResult parse(InputData& input) = 0;
+    virtual std::shared_ptr<SqlParseResult> parse(InputData& input) = 0;
 };
 
 class QuerySqlParser : public ISqlParser
@@ -93,5 +93,5 @@ private:
     std::string extractOrderByClause(const std::string& processedSql);
     std::string extractLimitClause(const std::string& processedSql);
 public:
-    SqlParseResult parse(InputData& input) override;
+    std::shared_ptr<SqlParseResult> parse(InputData& input) override;
 };

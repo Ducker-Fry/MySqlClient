@@ -70,6 +70,7 @@ void QuerySqlParser::extractTableAndDatabase(const std::string& processedSql, st
             table = tableStr; // 无数据库名，默认空
         }
     }
+}
 
 std::string QuerySqlParser::extractWhereClause(const std::string& processedSql)
 {
@@ -130,7 +131,7 @@ std::string QuerySqlParser::extractLimitClause(const std::string& processedSql)
     return "";
 }
 
-SqlParseResult QuerySqlParser::parse(InputData& input)
+std::shared_ptr<SqlParseResult> QuerySqlParser::parse(InputData& input)
 {
     std::string rawData = input.getRawData();
     SqlParseResultQuery result;
@@ -143,29 +144,30 @@ SqlParseResult QuerySqlParser::parse(InputData& input)
 
     // 根据SQL类型处理四类基本MySQL语句
     if (sqlType == "SELECT") {
-        result.setType(SqlType::SELECT);
+        result.setOperationType(SqlType::SELECT);
         result.setTable(table);
         result.setDatabase(db);
+        result.setColumns(extractColumns(processedSql));
         result.setWhereClause(where);
         result.setLimitClause(limit);
     }
     else if (sqlType == "INSERT") {
-        result.setType(SqlType::INSERT);
+        result.setOperationType(SqlType::INSERT);
         result.setTable(table);
         result.setDatabase(db);
     }
     else if (sqlType == "UPDATE") {
-        result.setType(SqlType::UPDATE);
+        result.setOperationType(SqlType::UPDATE);
         result.setTable(table);
         result.setDatabase(db);
         result.setWhereClause(where);
     }
     else if (sqlType == "DELETE") {
-        result.setType(SqlType::DELETE);
+        result.setOperationType(SqlType::DELETE);
         result.setTable(table);
         result.setDatabase(db);
         result.setWhereClause(where);
     }
 
-    return result;
+    return std::make_shared<SqlParseResultQuery>(result);
 }
