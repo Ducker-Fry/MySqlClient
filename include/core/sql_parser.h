@@ -96,6 +96,7 @@ private:
     std::string extractHavingClause(const std::string& processedSql);
     std::string extractOrderByClause(const std::string& processedSql);
     std::string extractLimitClause(const std::string& processedSql);
+
 public:
     std::shared_ptr<SqlParseResult> parse(InputData& input) override;
 };

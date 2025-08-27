@@ -13,6 +13,8 @@ std::string QuerySqlParser::preprocessSql(const std::string& sql)
     processed = std::regex_replace(processed, std::regex("--.*$"), "", std::regex_constants::match_any);
     // 去除多余空格和换行
     processed = std::regex_replace(processed, std::regex("\\s+"), " ");
+    // 去除语句末尾的分号
+    processed = std::regex_replace(processed, std::regex(";\\s*$"), "");
     // 转为大写（便于关键词匹配）
     std::transform(processed.begin(), processed.end(), processed.begin(), ::toupper);
 
@@ -22,7 +24,7 @@ std::string QuerySqlParser::preprocessSql(const std::string& sql)
 std::string QuerySqlParser::extractSqlType(const std::string& processedSql)
 {
     std::smatch match;
-    if(std::regex_search(processedSql, match, std::regex("^(SELECT|INSERT|UPDATE|DELETE)")))
+    if(std::regex_search(processedSql, match, std::regex("(SELECT|INSERT|UPDATE|DELETE)")))
     {
         return match[1].str();
     }
@@ -161,6 +163,7 @@ std::shared_ptr<SqlParseResult> QuerySqlParser::parse(InputData& input)
     result.setColumns(extractColumns(processedSql));
     result.setWhereClause(where);
     result.setGroupByColumns(groupBy);
+    result.setOrderByClause(orderBy);
     result.setHavingClause(having);
     result.setLimitClause(limit);
 

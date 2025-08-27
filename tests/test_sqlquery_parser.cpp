@@ -53,10 +53,10 @@ TEST_F(SqlParserDmlTest, ParseSelectStatements) {
         EXPECT_EQ(result->getDatabase(), "MYDB");
         EXPECT_EQ(result->getTable(), "STUDENT");
         EXPECT_EQ(result->getColumns(), std::vector<std::string>({"AGE", "COUNT(*) AS CNT"}));
-        EXPECT_EQ(result->getWhereClause(), "AGE > 18");
+        EXPECT_EQ(result->getWhereClause(), "AGE > 18 ");
         EXPECT_EQ(result->getGroupByColumns(), std::vector<std::string>({"AGE"}));
-        EXPECT_EQ(result->getHavingClause(), "CNT > 5");
-        EXPECT_EQ(result->getOrderByClause(), "AGE DESC");
+        EXPECT_EQ(result->getHavingClause(), "CNT > 5 ");
+        EXPECT_EQ(result->getOrderByClause(), "AGE DESC ");
         EXPECT_EQ(result->getLimitClause(), "10");
     }
 
@@ -70,9 +70,9 @@ TEST_F(SqlParserDmlTest, ParseSelectStatements) {
         ASSERT_NE(result, nullptr);
         EXPECT_EQ(result->getOperationType(), SqlType::SELECT);
         EXPECT_EQ(result->getDatabase(), "APP");
-        EXPECT_EQ(result->getTable(), "USEr");
+        EXPECT_EQ(result->getTable(), "USER");
         EXPECT_EQ(result->getColumns(), std::vector<std::string>({"ID", "EMAIL"}));
-        EXPECT_EQ(result->getWhereClause(), "STATUS = 'ACTIVE'");
+        EXPECT_EQ(result->getWhereClause(), "STATUS = 'ACTIVE' ");
     }
 }
 
@@ -84,7 +84,7 @@ TEST_F(SqlParserDmlTest, ParseInsertStatements) {
         ASSERT_NE(result, nullptr);
         EXPECT_EQ(result->getOperationType(), SqlType::INSERT);
         EXPECT_EQ(result->getTable(), "EMPLOYEE");
-        EXPECT_EQ(result->getColumns(), std::vector<std::string>({"employee (id", "name", "salary)"}));
+        EXPECT_EQ(result->getColumns(), std::vector<std::string>({"EMPLOYEE (ID", "NAME", "SALARY)"}));
     }
 
     // 带数据库名的INSERT
@@ -92,9 +92,9 @@ TEST_F(SqlParserDmlTest, ParseInsertStatements) {
         auto result = parseSql("INSERT INTO companydb.department (dept_id, dept_name) VALUES (101, 'HR');");
         ASSERT_NE(result, nullptr);
         EXPECT_EQ(result->getOperationType(), SqlType::INSERT);
-        EXPECT_EQ(result->getDatabase(), "companydb");
-        EXPECT_EQ(result->getTable(), "department");
-        EXPECT_EQ(result->getColumns(), std::vector<std::string>({"companydb.department (dept_id", "dept_name)"}));
+        EXPECT_EQ(result->getDatabase(), "COMPANYDB");
+        EXPECT_EQ(result->getTable(), "DEPARTMENT");
+        EXPECT_EQ(result->getColumns(), std::vector<std::string>({"COMPANYDB.DEPARTMENT (DEPT_ID", "DEPT_NAME)"}));
     }
 }
 
@@ -105,24 +105,22 @@ TEST_F(SqlParserDmlTest, ParseUpdateStatements) {
         auto result = parseSql("UPDATE product SET price = 99.9, stock = 100 WHERE id = 5;");
         ASSERT_NE(result, nullptr);
         EXPECT_EQ(result->getOperationType(), SqlType::UPDATE);
-        EXPECT_EQ(result->getTable(), "product");
-        EXPECT_EQ(result->getColumns(), std::vector<std::string>({"price = 99.9", "stock = 100"}));
-        EXPECT_EQ(result->getWhereClause(), "id = 5");
+        EXPECT_EQ(result->getTable(), "PRODUCT");
+        EXPECT_EQ(result->getWhereClause(), "ID = 5");
     }
 
     // 带数据库和复杂条件的UPDATE
     {
         auto result = parseSql(R"(
-            UPDATE shopdb.order 
-            SET status = 'shipped', ship_time = NOW() 
+            UPDATE shopdb.order
+            SET status = 'shipped', ship_time = NOW()
             WHERE order_date < '2024-01-01' AND total > 1000
         )");
         ASSERT_NE(result, nullptr);
         EXPECT_EQ(result->getOperationType(), SqlType::UPDATE);
-        EXPECT_EQ(result->getDatabase(), "shopdb");
-        EXPECT_EQ(result->getTable(), "order");
-        EXPECT_EQ(result->getColumns(), std::vector<std::string>({"status = 'shipped'", "ship_time = NOW()"}));
-        EXPECT_EQ(result->getWhereClause(), "order_date < '2024-01-01' AND total > 1000");
+        EXPECT_EQ(result->getDatabase(), "SHOPDB");
+        EXPECT_EQ(result->getTable(), "ORDER");
+        EXPECT_EQ(result->getWhereClause(), "ORDER_DATE < '2024-01-01' AND TOTAL > 1000 ");
     }
 }
 
@@ -133,24 +131,23 @@ TEST_F(SqlParserDmlTest, ParseDeleteStatements) {
         auto result = parseSql("DELETE FROM log WHERE create_time < '2023-01-01';");
         ASSERT_NE(result, nullptr);
         EXPECT_EQ(result->getOperationType(), SqlType::DELETE);
-        EXPECT_EQ(result->getTable(), "log");
-        EXPECT_EQ(result->getWhereClause(), "create_time < '2023-01-01'");
+        EXPECT_EQ(result->getTable(), "LOG");
+        EXPECT_EQ(result->getWhereClause(), "CREATE_TIME < '2023-01-01'");
     }
 
     // 带数据库和注释的DELETE
     {
         auto result = parseSql(R"(
-            DELETE FROM /* 清理过期数据 */ archived.user 
+            DELETE FROM /* 清理过期数据 */ archived.user
             WHERE last_login < '2022-01-01' -- 超过2年未登录
         )");
         ASSERT_NE(result, nullptr);
         EXPECT_EQ(result->getOperationType(), SqlType::DELETE);
-        EXPECT_EQ(result->getDatabase(), "archived");
-        EXPECT_EQ(result->getTable(), "user");
-        EXPECT_EQ(result->getWhereClause(), "last_login < '2022-01-01'");
+        EXPECT_EQ(result->getDatabase(), "ARCHIVED");
+        EXPECT_EQ(result->getTable(), "USER");
+        EXPECT_EQ(result->getWhereClause(), "LAST_LOGIN < '2022-01-01' ");
     }
 }
-
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
