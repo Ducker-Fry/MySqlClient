@@ -13,6 +13,7 @@ endif()
 set(CMAKE_TOOLCHAIN_FILE "E:/Software/Vcpkg/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING  "Vcpkg toolchain file")
 
 project ("MySqlClient")
+set(CMAKE_CXX_STANDARD 20)
 
 # 查找 vcpkg 安装的 GTest，明确指定组件
 find_package(GTest REQUIRED)
@@ -20,12 +21,13 @@ find_package(GTest REQUIRED)
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include/input")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include/core")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/include/database")
 
 # 包含第三方库头文件目录
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/thirdparty")
 
 # 收集主程序需要的源文件。
-file(GLOB MAIN_SOURCES "src/*.cpp" "src/input/*.cpp" "src/core/*.cpp")
+file(GLOB MAIN_SOURCES "src/*.cpp" "src/input/*.cpp" "src/core/*.cpp" "src/database/*.cpp")
 file(GLOB  MAIN_HEADERS "include/*.h" "include/*/*.h")
 
 # 收集测试需要的源文件。
