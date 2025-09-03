@@ -55,8 +55,6 @@ namespace sql
             std::string dbPath;
             bool closed;
             bool autoCommit;
-            //get table json file path
-            std::string getTableFilePath(const std::string& tableName) const;
         public:
             Connection(const std::string& dbPath,std::string user,std::string passwd);
             ~Connection();
@@ -76,6 +74,8 @@ namespace sql
             bool tableExists(const std::string& tableName) const;   
             // get all column names of the specified table
             std::vector<std::string> getColumnNames(const std::string& tableName) const;
+            //get table json file path
+            std::string getTableFilePath(const std::string& tableName) const;
         };
 
         //Statement class for executing SQL statements
@@ -83,6 +83,24 @@ namespace sql
         {
         private:
             std::shared_ptr<Connection> connection;
+            
+            // Helper methods for executeUpdate
+            size_t executeUpdateImpl(const std::string& table, const std::string& setClause, const std::string& whereClause);
+            size_t executeDeleteImpl(const std::string& table, const std::string& whereClause);
+            size_t executeInsertWithColumns(const std::string& table, const std::string& columns, const std::string& values);
+            size_t executeInsertWithoutColumns(const std::string& table, const std::string& values);
+            
+            // Utility methods
+            std::map<std::string, std::string> parseSetClause(const std::string& setClause);
+            std::vector<std::string> parseList(const std::string& list);
+            nlohmann::json createRowFromValues(const std::vector<std::string>& colNames, const std::vector<std::string>& colValues);
+            nlohmann::json readTableData(const std::string& tablePath);
+            void writeTableData(const std::string& tablePath, const nlohmann::json& tableData);
+            bool evaluateCondition(const nlohmann::json& row, const std::string& condition);
+            
+            // Get table name from full table specification
+            std::string extractTableName(const std::string& tableSpec);
+
         public:
             Statement(Connection* conn) : connection(conn) {}
 

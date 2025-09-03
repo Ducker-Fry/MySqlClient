@@ -1,0 +1,6 @@
+E:/Draft/MySqlClient/build/CMakeFiles/app.dir
+E:/Draft/MySqlClient/build/CMakeFiles/test_console.dir
+E:/Draft/MySqlClient/build/CMakeFiles/test_parser.dir
+E:/Draft/MySqlClient/build/CMakeFiles/RUN_TESTS.dir
+E:/Draft/MySqlClient/build/CMakeFiles/ALL_BUILD.dir
+E:/Draft/MySqlClient/build/CMakeFiles/ZERO_CHECK.dir

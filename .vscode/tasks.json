@@ -1,0 +1,66 @@
+{
+    "tasks": [
+        {
+            "label": "CMake: 配置",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-S",".",
+                "-B","build",
+                "-DCMAKE_BUILD_TYPE=Debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "group": "build",
+            "detail": "使用CMake配置项目"
+        },
+        {
+            "label": "CMake: 构建",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": "使用CMake构建项目",
+            "dependsOn": "CMake: 配置"
+        },
+        {
+            "label": "CMake: 清理",
+            "type": "shell",
+            "command": "rmdir",
+            "args": [
+                "/s",
+                "/q",
+                "build"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "detail": "清理构建目录"
+        },
+        {
+            "label": "CMake: 运行主程序",
+            "type": "shell",
+            "command": "bin\\app.exe",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "detail": "运行主程序",
+            "dependsOn": "CMake: 构建"
+        }
+    ],
+    "version": "2.0.0"
+}

@@ -1,0 +1,5 @@
+if(EXISTS "E:/Draft/MySqlClient/build/test_console[1]_tests.cmake")
+  include("E:/Draft/MySqlClient/build/test_console[1]_tests.cmake")
+else()
+  add_test(test_console_NOT_BUILT test_console_NOT_BUILT)
+endif()
