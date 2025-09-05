@@ -116,6 +116,7 @@ namespace sql
         class PreparedStatement
         {
         private:
+            std::string placeholder = "?";
             std::shared_ptr<Connection> connection;
             std::string sql;
             std::vector<std::string> parameters; // Store parameters as strings for simplicity
@@ -126,7 +127,7 @@ namespace sql
             void setInt(size_t index, int value);
             void setFloat(size_t index, float value);
             void setString(size_t index, const std::string& value);
-            void setBoolean(size_t index, bool value);
+            void setBoolean(size_t index, bool value) { bindParameter(index, value ? "true" : "false");}
             void setDateTime(size_t index, const std::string& value); // Expecting ISO 8601 format
             std::shared_ptr<ResultSet> executeQuery();
             size_t executeUpdate();
@@ -141,7 +142,7 @@ namespace sql
             std::shared_ptr<ResultSetMetaData> metaData;
             size_t currentIndex;
         public:
-            ResultSet(const std::vector<nlohmann::json>& data);
+            ResultSet(const std::vector<nlohmann::json>& data){ rows = data; }
             bool next();
             int getInt(const std::string& columnLabel);
             float getFloat(const std::string& columnLabel);

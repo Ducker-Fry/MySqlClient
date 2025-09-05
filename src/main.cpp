@@ -12,6 +12,7 @@ int main()
 	try
 	{
 		auto conn = driver.connect("testdb", "admin", "password");
+		std::cout<<"Connection Success !"<<std::endl;
 
 	}
 	catch (const std::exception&)

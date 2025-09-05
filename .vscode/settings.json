@@ -85,6 +85,9 @@
     "C_Cpp.default.includePath": [
         "${workspaceFolder}/include",
         "${workspaceFolder}/include/*",
+        "${workspaceFolder}/include/core/*.h",
+        "${workspaceFolder}/include/database/*.h",
+        "${workspaceFolder}/include/input/*.h",
         "${workspaceFolder}/thirdparty"
     ]
 }

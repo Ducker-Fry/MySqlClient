@@ -257,6 +257,27 @@ size_t Statement::executeUpdate(const std::string& sql)
     return affectedRows;
 }
 
+bool sql::jsondb::Statement::execute(const std::string& sql)
+{
+    std::regex operationPattern(R"(^(?:SELECT|UPDATE|DELETE|INSERT)\s)", std::regex::icase);
+    std::smatch matches;
+    if (std::regex_search(sql, matches, operationPattern))
+    {
+        if (::toupper(matches[0].str()[0]) == 'S')
+        {
+            return executeQuery(sql) != nullptr;
+        }
+        else
+        {
+            return executeUpdate(sql) > 0;
+        }
+    }
+    else
+    {
+        throw JsonDbException("Invalid SQL statement: " + sql);
+    }
+}
+
 // 从完整表规范中提取表名
 std::string Statement::extractTableName(const std::string& tableSpec)
 {
@@ -643,3 +664,73 @@ bool Statement::evaluateCondition(const nlohmann::json& row, const std::string& 
     }
     return false;
 }
+
+void sql::jsondb::PreparedStatement::bindParameter(size_t index, const std::string& value)
+{
+    parameters[index - 1] = value; // subtract 1 because parameters are 1-based index
+}
+
+void sql::jsondb::PreparedStatement::setInt(size_t index, int value)
+{
+    //convert int to string
+    parameters[index - 1] = std::to_string(value);
+}
+
+void sql::jsondb::PreparedStatement::setFloat(size_t index, float value)
+{
+    parameters[index - 1] = std::to_string(value);
+}
+
+void sql::jsondb::PreparedStatement::setString(size_t index, const std::string& value)
+{
+    parameters[index - 1] = value;
+}
+
+void sql::jsondb::PreparedStatement::setDateTime(size_t index, const std::string& value)
+{
+    parameters[index - 1] = value;
+}
+
+std::shared_ptr<ResultSet> sql::jsondb::PreparedStatement::executeQuery()
+{
+    // TODO: Implement executeQuery for PreparedStatement
+    auto input = this->sql;
+    size_t pos = 0;
+    int index = 0;
+    while ((pos = input.find('?')) != std::string::npos)
+    {
+        input.replace(pos, 1, parameters[index++]);
+    }
+
+    return stmt.executeQuery(input);
+}
+
+size_t sql::jsondb::PreparedStatement::executeUpdate()
+{
+    // TODO: Implement executeUpdate for PreparedStatement
+    auto input = this->sql;
+    size_t pos = 0;
+    int index = 0;
+    while ((pos = input.find('?')) != std::string::npos)
+    {
+        input.replace(pos, 1, parameters[index++]);
+    }
+
+    return stmt.executeUpdate(input);
+}
+
+bool sql::jsondb::PreparedStatement::execute()
+{
+    // TODO: Implement execute for PreparedStatement
+    auto input = this->sql;
+    size_t pos = 0;
+    int index = 0;
+    while ((pos = input.find('?')) != std::string::npos)
+    {
+        input.replace(pos, 1, parameters[index++]);
+    }
+
+    return stmt.execute(input);
+}
+
+

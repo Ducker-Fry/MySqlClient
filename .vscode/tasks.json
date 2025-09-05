@@ -53,12 +53,29 @@
         {
             "label": "CMake: 运行主程序",
             "type": "shell",
-            "command": "bin\\app.exe",
+            "command": "powershell",
+            "args": [
+                "bin\\Debug\\app.exe"
+            ],
             "options": {
                 "cwd": "${workspaceFolder}"
             },
             "problemMatcher": [],
             "detail": "运行主程序",
+            "dependsOn": "CMake: 构建"
+        },
+        {
+            "label": "CMake: 运行测试",
+            "type": "shell",
+            "command": "powershell",
+            "args": [
+                "bin\\Debug\\test_*.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [],
+            "detail": "运行测试程序",
             "dependsOn": "CMake: 构建"
         }
     ],
