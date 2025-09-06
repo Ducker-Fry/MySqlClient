@@ -733,4 +733,108 @@ bool sql::jsondb::PreparedStatement::execute()
     return stmt.execute(input);
 }
 
+bool sql::jsondb::ResultSet::is_date(const std::string& str)
+{
+    // using regex to match date format, e.g., 2022-01-01
+    // not perfect, but should work for most cases
+    std::regex datePattern(R"(\d{4}-\d{2}-\d{2})");
+    std::regex dateTimePattern(R"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})");
+    std::regex timePattern(R"(\d{2}:\d{2}:\d{2})");
+    return std::regex_match(str, datePattern) || std::regex_match(str, dateTimePattern) || std::regex_match(str, timePattern);
+}
 
+sql::jsondb::ResultSet::ResultSet(const std::vector<nlohmann::json>& data)
+{
+    currentIndex = 0;
+    rows = data;
+    auto& columns = metaData->columns;
+    // TODO: Initialize metaData based on the structure of the rows
+    auto firstRow = rows.empty() ? nlohmann::json::object() : rows[0];
+    for (auto& [key, value] : firstRow.items())
+    {
+        if (value.is_number_integer())
+        {
+            columns.push_back({ key, DataType::INT });
+        }
+        else if (value.is_number_float())
+        {
+            columns.push_back({ key, DataType::FLOAT });
+        }
+        else if (value.is_boolean())
+        {
+            columns.push_back({ key, DataType::BOOLEAN });
+        }
+        else if (value.is_string())
+        {
+            columns.push_back({ key, DataType::VARCHAR });
+        }
+        else if (is_date(value.get<std::string>()))
+        {
+            columns.push_back({ key, DataType::DATETIME });
+        }
+        else
+        {
+            columns.push_back({ key, DataType::UNKOWN });
+        }
+    }
+
+}
+
+bool ResultSet::next()
+{
+    if (currentIndex < rows.size())
+    {
+        currentIndex++;
+    }
+    else return false;
+}
+
+int sql::jsondb::ResultSet::getInt(const std::string& columnLabel)
+{
+    return rows[currentIndex][columnLabel].get<int>();
+}
+
+float sql::jsondb::ResultSet::getFloat(const std::string& columnLabel)
+{
+    return rows[currentIndex][columnLabel].get<float>();
+}
+
+std::string sql::jsondb::ResultSet::getString(const std::string& columnLabel)
+{
+    return rows[currentIndex][columnLabel].get<std::string>();
+}
+
+bool sql::jsondb::ResultSet::getBoolean(const std::string& columnLabel)
+{
+    return rows[currentIndex][columnLabel].get<bool>();
+}
+
+std::string sql::jsondb::ResultSet::getDateTime(const std::string& columnLabel)
+{
+    return rows[currentIndex][columnLabel].get<std::string>();
+}
+
+std::string sql::jsondb::ResultSetMetaData::getColumnName(size_t index) const
+{
+    return columns[index].first;
+}
+
+DataType sql::jsondb::ResultSetMetaData::getColumnType(size_t index) const
+{
+    return columns[index].second;
+}
+
+std::vector<std::string> sql::jsondb::DatabaseMetaData::getTables()
+{
+    auto dbPath = connection->getDbPath();
+    std::vector<std::string> tables;
+    for (auto& file : std::filesystem::directory_iterator(dbPath))
+    {
+        if (file.is_regular_file() && file.path().extension() == ".json")
+        {
+            tables.push_back(file.path().stem().string());
+        }
+    }
+
+    return tables;
+}

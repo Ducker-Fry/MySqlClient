@@ -26,7 +26,8 @@ namespace sql
             VARCHAR,
             BOOLEAN,
             TEXT,
-            DATETIME
+            DATETIME,
+            UNKOWN
         };
 
         // basic exception class for JSON database errors
@@ -76,6 +77,7 @@ namespace sql
             std::vector<std::string> getColumnNames(const std::string& tableName) const;
             //get table json file path
             std::string getTableFilePath(const std::string& tableName) const;
+            std::string getDbPath() const { return dbPath; }
         };
 
         //Statement class for executing SQL statements
@@ -141,24 +143,24 @@ namespace sql
             std::vector<nlohmann::json> rows; // Each row is a JSON object
             std::shared_ptr<ResultSetMetaData> metaData;
             size_t currentIndex;
+            bool is_date(const std::string& str);
         public:
-            ResultSet(const std::vector<nlohmann::json>& data){ rows = data; }
+            ResultSet(const std::vector<nlohmann::json>& data);
             bool next();
             int getInt(const std::string& columnLabel);
             float getFloat(const std::string& columnLabel);
             std::string getString(const std::string& columnLabel);
             bool getBoolean(const std::string& columnLabel);
             std::string getDateTime(const std::string& columnLabel); // Return as ISO 8601 string
-            std::shared_ptr<ResultSetMetaData> getMetaData() const;
-            void close();
-            bool isClosed() const;
-            std::shared_ptr<DatabaseMetaData> getMetaData();
+            std::shared_ptr<ResultSetMetaData> getMetaData() const { return metaData; }
+            void reset() { currentIndex = 0; }
         };
 
         //ResultSetMetaData class for metadata about ResultSet
         class ResultSetMetaData
         {
         private:
+            friend class ResultSet;
             std::vector<std::pair<std::string, DataType>> columns; // column name and data type
         public:
             ResultSetMetaData(const std::vector<std::pair<std::string, DataType>> cols) : columns(std::move(cols)) {}
@@ -175,7 +177,6 @@ namespace sql
         public:
             DatabaseMetaData(Connection* conn) : connection(conn) {}
             std::vector<std::string> getTables();
-            std::vector<std::pair<std::string, DataType>> getColumns(const std::string& tableName);
         };
     }
 }
