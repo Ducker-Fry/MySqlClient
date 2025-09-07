@@ -21,6 +21,33 @@ std::string Connection::getTableFilePath(const std::string& tableName) const
     return path.string();
 }
 
+std::vector<nlohmann::json> sql::jsondb::Connection::getTableData(const std::string& tableName) const
+{
+    auto path = getTableFilePath(tableName);
+    if (!fs::exists(path))
+    {
+        throw JsonDbException("Table does not exist: " + tableName);
+    }
+
+    std::ifstream file(path);
+    if (!file.is_open())
+    {
+        throw JsonDbException("Failed to open table file: " + path);
+    }
+    else
+    {
+        std::vector<nlohmann::json> data;
+        nlohmann::json json_data;
+        file >> json_data;
+        for (const auto& item : json_data)
+        {
+            data.push_back(item);
+        }
+        file.close();
+        return data;
+    }
+}
+
 Connection::Connection(const std::string& dbPath, std::string user, std::string passwd)
 {
     this->dbPath = dbPath;
@@ -52,10 +79,10 @@ Connection::~Connection()
             close();
         }
     }
-    catch (const JsonDbException& e)
+    catch (...)
     {
         // handle exception
-        throw e;
+        throw JsonDbException("Exception in Connection::~Connection()");
     }
 }
 
@@ -207,6 +234,68 @@ std::shared_ptr<ResultSet> Statement::executeQuery(const std::string& sql)
         }
     }
 
+    // 获取表数据
+    std::vector<nlohmann::json> tableData = connection->getTableData(table);
+
+    // 筛选符合条件的数据
+    std::vector<nlohmann::json> filteredData;
+
+
+    for (const auto& row : tableData)
+    {
+        bool match = true;
+        // 解析条件并检查每行数据
+        std::regex condPattern(R"((\w+)\s*(=|>|<|>=|<=|!=)\s*(['"]?)([^'"]*)\3)");
+        std::smatch condMatch;
+        if (std::regex_match(condition, condMatch, condPattern))
+        {
+            std::string condColumn = condMatch[1].str();
+            std::string condOp = condMatch[2].str();
+            std::string condValue = condMatch[4].str();
+
+            if (row.is_object())  // 修正：检查是否为对象类型
+            {
+                nlohmann::json columnValue = row[condColumn];
+                bool conditionMet = false;
+
+                if (columnValue.is_string())
+                {
+                    if (condOp == "=") conditionMet = columnValue.get<std::string>() == condValue;
+                    else if (condOp == "!=") conditionMet = columnValue.get<std::string>() != condValue;
+                }
+                else if (columnValue.is_number())
+                {
+                    double numValue = columnValue.get<double>();
+                    double condNumValue = std::stod(condValue);
+                    if (condOp == "=") conditionMet = numValue == condNumValue;
+                    else if (condOp == "!=") conditionMet = numValue != condNumValue;
+                    else if (condOp == ">") conditionMet = numValue > condNumValue;
+                    else if (condOp == "<") conditionMet = numValue < condNumValue;
+                    else if (condOp == ">=") conditionMet = numValue >= condNumValue;
+                    else if (condOp == "<=") conditionMet = numValue <= condNumValue;
+                }
+
+                match = conditionMet;
+            }
+            else
+            {
+                match = false;
+            }
+        }
+        else
+        {
+            match = false;
+        }
+
+        if (match)
+        {
+            filteredData.push_back(row);
+        }
+    }
+
+    // 创建并返回结果集
+    auto resultSet = std::make_shared<ResultSet>(filteredData);
+    return resultSet;
 }
 
 

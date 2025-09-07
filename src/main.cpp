@@ -11,9 +11,10 @@ int main()
     auto driver = sql::jsondb::Driver::getInstance();
 	try
 	{
-		auto conn = driver.connect("testdb", "admin", "password");
-		std::cout<<"Connection Success !"<<std::endl;
-
+		auto conn = driver.connect("E:\\Draft\\MySqlClient\\testdb", "admin", "password");
+		auto stmt = conn->createStatement();
+		auto res = stmt->executeUpdate("INSERT INTO test (id, name) VALUES (1, 'test')");
+		std::cout << "Insert " << res << " rows." << std::endl;
 	}
 	catch (const std::exception&)
 	{

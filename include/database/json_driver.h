@@ -1,10 +1,12 @@
 // 模仿mysql_connection.h的核心类结构
+#pragma once
 #include <string>
 #include <vector>
 #include <map>
 #include <memory>
 #include <json.hpp>
 #include <stdexcept>
+#include <iostream>
 
 namespace sql
 {
@@ -78,13 +80,14 @@ namespace sql
             //get table json file path
             std::string getTableFilePath(const std::string& tableName) const;
             std::string getDbPath() const { return dbPath; }
+            std::vector<nlohmann::json> getTableData(const std::string& tableName) const;
         };
 
         //Statement class for executing SQL statements
         class Statement
         {
         private:
-            std::shared_ptr<Connection> connection;
+            Connection* connection;
             
             // Helper methods for executeUpdate
             size_t executeUpdateImpl(const std::string& table, const std::string& setClause, const std::string& whereClause);
@@ -105,8 +108,8 @@ namespace sql
 
         public:
             Statement(Connection* conn) : connection(conn) {}
-
             // Execute a SQL query and return a ResultSet
+            ~Statement(){ std::cout<<"Statement destructor called\n";}
             std::shared_ptr<ResultSet> executeQuery(const std::string& sql);
             // Execute a SQL update and return the number of affected rows , for INSERT, UPDATE, DELETE, etc.
             size_t executeUpdate(const std::string& sql);
