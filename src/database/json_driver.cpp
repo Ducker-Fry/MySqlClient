@@ -97,12 +97,12 @@ void Connection::close()
 
 std::shared_ptr<Statement> Connection::createStatement()
 {
-    return std::make_shared<Statement>(this);
+    return std::make_shared<Statement>(shared_from_this());
 }
 
 std::shared_ptr<PreparedStatement> Connection::prepareStatement(const std::string& sql)
 {
-    return std::make_shared<PreparedStatement>(this, sql);
+    return std::make_shared<PreparedStatement>(shared_from_this(), sql);
 }
 
 void Connection::commit()
@@ -836,6 +836,8 @@ sql::jsondb::ResultSet::ResultSet(const std::vector<nlohmann::json>& data)
 {
     currentIndex = 0;
     rows = data;
+    // initialize metaData
+    metaData = std::make_shared<ResultSetMetaData>();
     auto& columns = metaData->columns;
     // TODO: Initialize metaData based on the structure of the rows
     auto firstRow = rows.empty() ? nlohmann::json::object() : rows[0];
@@ -874,6 +876,7 @@ bool ResultSet::next()
     if (currentIndex < rows.size())
     {
         currentIndex++;
+        return true;
     }
     else return false;
 }

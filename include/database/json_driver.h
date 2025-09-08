@@ -52,7 +52,7 @@ namespace sql
         };
 
         //Connection class for managing database connections
-        class Connection
+        class Connection : public std::enable_shared_from_this<Connection>
         {
         private:
             std::string dbPath;
@@ -87,7 +87,7 @@ namespace sql
         class Statement
         {
         private:
-            Connection* connection;
+            std::shared_ptr<Connection> connection;
             
             // Helper methods for executeUpdate
             size_t executeUpdateImpl(const std::string& table, const std::string& setClause, const std::string& whereClause);
@@ -107,7 +107,7 @@ namespace sql
             std::string extractTableName(const std::string& tableSpec);
 
         public:
-            Statement(Connection* conn) : connection(conn) {}
+            Statement(std::shared_ptr<Connection> conn) : connection(conn) {}
             // Execute a SQL query and return a ResultSet
             ~Statement(){ std::cout<<"Statement destructor called\n";}
             std::shared_ptr<ResultSet> executeQuery(const std::string& sql);
@@ -128,7 +128,7 @@ namespace sql
             void bindParameter(size_t index, const std::string& value);
             Statement stmt; // composition with Statement
         public:
-            PreparedStatement(Connection* conn, const std::string& sql) : connection(conn), sql(sql), stmt(conn) {}
+            PreparedStatement(std::shared_ptr<Connection> conn, const std::string& sql) : connection(conn), sql(sql), stmt(conn) {}
             void setInt(size_t index, int value);
             void setFloat(size_t index, float value);
             void setString(size_t index, const std::string& value);

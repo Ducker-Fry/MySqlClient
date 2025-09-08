@@ -56,6 +56,14 @@ target_link_libraries(
     PRIVATE GTest::gtest
 )
 
+add_executable(test_driver "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_driver.cpp")
+target_link_libraries(
+    test_driver
+    PRIVATE GTest::gtest_main
+    PRIVATE GTest::gtest
+)
+
+
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET app PROPERTY CXX_STANDARD 20)
 endif()
@@ -66,4 +74,4 @@ enable_testing()
 # 引入 GoogleTest 提供的测试发现相关功能
 include(GoogleTest)
 # 注册测试用例，让 CMake 能发现测试
-gtest_discover_tests(test_console test_parser)
+gtest_discover_tests(test_console test_parser test_driver)
