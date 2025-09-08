@@ -906,6 +906,11 @@ std::string sql::jsondb::ResultSet::getDateTime(const std::string& columnLabel)
     return rows[currentIndex][columnLabel].get<std::string>();
 }
 
+sql::jsondb::ResultSetMetaData::ResultSetMetaData()
+{
+    columns = std::vector<std::pair<std::string, DataType>>();
+}
+
 std::string sql::jsondb::ResultSetMetaData::getColumnName(size_t index) const
 {
     return columns[index].first;

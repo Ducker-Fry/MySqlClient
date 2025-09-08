@@ -33,7 +33,7 @@ file(GLOB  MAIN_HEADERS "include/*.h" "include/*/*.h")
 # 收集测试需要的源文件。
 file(GLOB TEST_CONSOLE_SOURCE "tests/test_console_input.cpp"  "src/input/input_console.cpp")
 file(GLOB TEST_SQLQUERY_PARSER_SOURCE "tests/test_sqlquery_parser.cpp"  "src/core/sql_parser.cpp")
-
+file(GLOB TEST_DRIVER_SOURCE "tests/test_driver.cpp" "src/database/json_driver.cpp" )
 # 设置输出目录
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
@@ -56,7 +56,7 @@ target_link_libraries(
     PRIVATE GTest::gtest
 )
 
-add_executable(test_driver "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_driver.cpp")
+add_executable(test_driver ${TEST_DRIVER_SOURCE})
 target_link_libraries(
     test_driver
     PRIVATE GTest::gtest_main

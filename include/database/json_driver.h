@@ -167,6 +167,7 @@ namespace sql
             std::vector<std::pair<std::string, DataType>> columns; // column name and data type
         public:
             ResultSetMetaData(const std::vector<std::pair<std::string, DataType>> cols) : columns(std::move(cols)) {}
+            ResultSetMetaData();
             size_t getColumnCount() const { return columns.size(); }
             std::string getColumnName(size_t index) const;
             DataType getColumnType(size_t index) const;
