@@ -346,15 +346,74 @@ size_t Statement::executeUpdate(const std::string& sql)
     return affectedRows;
 }
 
+bool sql::jsondb::Statement::executeCreate(const std::string& sql)
+{
+    {
+        // 解析SQL语句，判断是创建数据库还是创建表
+        std::string lower_sql = sql;
+        std::transform(lower_sql.begin(), lower_sql.end(), lower_sql.begin(), ::tolower);
+
+        // 定义正则表达式模式
+        std::regex db_regex(R"(create\s+database\s+([^;]+))");
+        std::regex table_regex(R"(create\s+table\s+(\w+)\s*\((.*?)\))");
+        std::smatch match;
+
+        if (std::regex_search(lower_sql, match, db_regex))
+        {
+            // 提取数据库名称
+            std::string db_name = match[1].str();
+            // 去除可能的空格
+            db_name.erase(std::remove_if(db_name.begin(), db_name.end(), ::isspace), db_name.end());
+
+            // 创建数据库文件夹
+            std::string db_path = "./" + db_name; // 默认在当前项目目录下
+            if (std::filesystem::exists(db_path))
+            {
+                return false; // 数据库已存在
+            }
+            std::filesystem::create_directories(db_path);
+            return true;
+        }
+        else if (std::regex_search(lower_sql, match, table_regex))
+        {
+            // 提取表名
+            std::string table_name = match[1].str();
+            // 去除表名前后可能的空格（增强兼容性）
+            table_name.erase(table_name.begin(), std::find_if(table_name.begin(), table_name.end(), [](int ch) {
+                return !std::isspace(ch);
+                }));
+            table_name.erase(std::find_if(table_name.rbegin(), table_name.rend(), [](int ch) {
+                return !std::isspace(ch);
+                }).base(), table_name.end());
+
+            // 创建表文件（JSON文件）
+            std::string table_path = connection->getDbPath() + "/" + table_name + ".json";
+            if (std::filesystem::exists(table_path))
+            {
+                return false; // 表已存在
+            }
+            std::ofstream file(table_path);
+            file << "[]"; // 初始化为空数组
+            file.close();
+            return true;
+        }
+
+        return false; // 不支持的SQL语句
+    }
+}
 bool sql::jsondb::Statement::execute(const std::string& sql)
 {
-    std::regex operationPattern(R"(^(?:SELECT|UPDATE|DELETE|INSERT)\s)", std::regex::icase);
+    std::regex operationPattern(R"(^(?:SELECT|UPDATE|DELETE|INSERT|CREATE)\s)", std::regex::icase);
     std::smatch matches;
     if (std::regex_search(sql, matches, operationPattern))
     {
         if (::toupper(matches[0].str()[0]) == 'S')
         {
             return executeQuery(sql) != nullptr;
+        }
+        else if (::toupper(matches[0].str()[0]) == 'C')
+        {
+            return executeCreate(sql);
         }
         else
         {
@@ -370,12 +429,15 @@ bool sql::jsondb::Statement::execute(const std::string& sql)
 // 从完整表规范中提取表名
 std::string Statement::extractTableName(const std::string& tableSpec)
 {
-    std::regex tablePattern(R"(\s*.*\.?([a-zA-Z0-9_]+)\s*)");
+    // 修复正则：处理可选库名前缀，避免贪婪匹配吞噬表名，修正拼写错误
+    std::regex tablePattern(R"(\s*(?:[^.]+\.)?([A-Za-z0-9_]+)\s*)");
     std::smatch tableMatch;
+
     if (!std::regex_match(tableSpec, tableMatch, tablePattern))
     {
         throw JsonDbException("Invalid table name: " + tableSpec);
     }
+
     return tableMatch[1].str();
 }
 

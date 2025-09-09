@@ -114,6 +114,7 @@ namespace sql
             // Execute a SQL update and return the number of affected rows , for INSERT, UPDATE, DELETE, etc.
             size_t executeUpdate(const std::string& sql);
             // Generic execute method for any SQL statement
+            bool executeCreate(const std::string& sql);
             bool execute(const std::string& sql);
         };
 

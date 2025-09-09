@@ -130,6 +130,10 @@ TEST_F(JsonDbBaseTest, Connection_Close_SetClosedStatus) {
 TEST_F(JsonDbBaseTest, Statement_ExecuteInsert_CreatesTableAndData) {
     const std::string tableName = "product";
     std::shared_ptr<Statement> stmt = conn->createStatement();
+    //创建product表
+    std::string createTableSql = "CREATE TABLE " + tableName + " (id INT, name VARCHAR(255), price FLOAT)";
+    bool is_created = stmt->execute(createTableSql);
+    if(is_created) std::cout<<"Table created successfully."<<std::endl;
 
     // 执行 INSERT 语句（带列名）
     std::string insertSql = "INSERT INTO " + tableName + " (id, name, price) VALUES (1, 'Laptop', 5999.9)";
