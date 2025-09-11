@@ -180,7 +180,8 @@ std::vector<std::string> Connection::getColumnNames(const std::string& tableName
 std::shared_ptr<ResultSet> Statement::executeQuery(const std::string& sql)
 {
     // parse sql statement and use std::regex to match the pattern
-    std::regex selectPattern(R"(SELECT\s+(.*?)\s+FROM\s+(.*?)\s+WHERE\s+(.*?)\s+)", std::regex::icase);
+    // 允许结尾有可选的分号和空白字符
+    std::regex selectPattern(R"(SELECT\s+(.*?)\s+FROM\s+(.*?)\s+WHERE\s+(.*?)\s*;?)", std::regex::icase);
 
     std::smatch matches;
     //handle exception
@@ -220,7 +221,7 @@ std::shared_ptr<ResultSet> Statement::executeQuery(const std::string& sql)
     else
     {
         // 优化后正则：允许前后空格，匹配最后一个点后的表名
-        std::regex tablePattern(R"(\s*.*\.?(\w+)\s*)");
+        std::regex tablePattern(R"(\s*((\w+)\.)?(\w+)\s*)");
         std::smatch tableMatch;
 
         // 用 regex_match 确保全字符串匹配（避免部分匹配问题）
@@ -230,7 +231,7 @@ std::shared_ptr<ResultSet> Statement::executeQuery(const std::string& sql)
         }
         else
         {
-            table = tableMatch[1].str();
+            table = tableMatch[3].str();
         }
     }
 
