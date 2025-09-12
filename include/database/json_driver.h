@@ -102,7 +102,12 @@ namespace sql
             nlohmann::json readTableData(const std::string& tablePath);
             void writeTableData(const std::string& tablePath, const nlohmann::json& tableData);
             bool evaluateCondition(const nlohmann::json& row, const std::string& condition);
-            
+            std::vector<std::string> splitValueGroups(const std::string& valuesStr);
+            std::vector<std::string> splitValueGroup(const std::string& valueGroup);
+            nlohmann::json parseValue(const std::string& valueStr);
+            std::string trim(const std::string& s);
+            std::vector<std::string> split(const std::string& s, char delimiter);
+
             // Get table name from full table specification
             std::string extractTableName(const std::string& tableSpec);
 

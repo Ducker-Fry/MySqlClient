@@ -306,8 +306,9 @@ size_t Statement::executeUpdate(const std::string& sql)
     // parse sql statement and use std::regex to match the pattern
     std::regex updatePattern(R"(UPDATE\s+(.*?)\s+SET\s+(.*?)\s+WHERE\s+(.*?)\s*(?:;)?$)", std::regex::icase);
     std::regex deletePattern(R"(DELETE\s+FROM\s+(.*?)\s+WHERE\s+(.*?)\s*(?:;)?$)", std::regex::icase);
-    std::regex insertPattern(R"(INSERT\s+INTO\s+(.*?)\s+\((.*?)\)\s+VALUES\s+\((.*?)\)\s*(?:;)?$)", std::regex::icase);
-    std::regex insertNoColumnsPattern(R"(INSERT\s+INTO\s+(.*?)\s+VALUES\s+\((.*?)\)\s*(?:;)?$)", std::regex::icase);
+    // 支持多值的INSERT正则
+    std::regex insertPattern(R"(INSERT\s+INTO\s+(.*?)\s+\((.*?)\)\s+VALUES\s+(\((?:[^()]+|\([^()]*\))*\)(?:\s*,\s*\((?:[^()]+|\([^()]*\))*\))*)\s*(?:;)?$)", std::regex::icase);
+    std::regex insertNoColumnsPattern(R"(INSERT\s+INTO\s+(.*?)\s+VALUES\s+(\((?:[^()]+|\([^()]*\))*\)(?:\s*,\s*\((?:[^()]+|\([^()]*\))*\))*)\s*(?:;)?$)", std::regex::icase);
 
     std::smatch matches;
     size_t affectedRows = 0;
@@ -330,14 +331,14 @@ size_t Statement::executeUpdate(const std::string& sql)
     {
         std::string table = extractTableName(matches[1]);
         std::string columns = matches[2];
-        std::string values = matches[3];
+        std::string values = matches[3]; // 多值组字符串（如"(v1), (v2)"）
         affectedRows = executeInsertWithColumns(table, columns, values);
     }
     else if (std::regex_match(sql, matches, insertNoColumnsPattern))
     {
         std::string table = extractTableName(matches[1]);
-        std::string values = matches[2];
-        affectedRows = executeInsertWithoutColumns(table, values);
+        std::string values = matches[2]; // 多值组字符串
+        affectedRows = executeInsertWithoutColumns(table, values); // 需同步修改此函数支持多值
     }
     else
     {
@@ -696,36 +697,124 @@ size_t Statement::executeDeleteImpl(const std::string& table, const std::string&
     return affectedRows;
 }
 
-// 实现带列名的INSERT操作
-size_t Statement::executeInsertWithColumns(const std::string& table, const std::string& columns, const std::string& values)
+// 辅助函数：拆分多值组（如 "('Bob',12), ('Alice',14)" → ["('Bob',12)", "('Alice',14)"]）
+std::vector<std::string> Statement::splitValueGroups(const std::string& valuesStr) {
+    std::vector<std::string> groups;
+    std::regex groupRegex(R"(\((?:[^()]+|\([^()]*\))*\))"); // 匹配单个值组
+    auto it = std::sregex_iterator(valuesStr.begin(), valuesStr.end(), groupRegex);
+    for (; it != std::sregex_iterator(); ++it) {
+        groups.push_back(it->str());
+    }
+    return groups;
+}
+
+// 辅助函数：拆分单个值组（如 "('Bob',12)" → ["'Bob'", "12"]）
+std::vector<std::string> Statement::splitValueGroup(const std::string& valueGroup) {
+
+    std::string trimmed = valueGroup.substr(1, valueGroup.size() - 2);
+    // 去除外层括号
+    
+    std::vector<std::string> values;
+    std::regex valueRegex(R"((?:"[^"]*"|'[^']*'|[^,]+))"); // 匹配带引号的字符串或非逗号值
+    auto it = std::sregex_iterator(trimmed.begin(), trimmed.end(), valueRegex);
+    for (; it != std::sregex_iterator(); ++it) {
+        std::string val = trim(it->str());
+        values.push_back(val);
+    }
+    return values;
+}
+
+// 辅助函数：解析值（去除引号、转换为对应类型）
+nlohmann::json Statement::parseValue(const std::string& valueStr) 
 {
-    // 解析列名和值
-    std::vector<std::string> colNames = parseList(columns);
-    std::vector<std::string> colValues = parseList(values);
-    
-    // 创建新行数据
-    nlohmann::json newRow = createRowFromValues(colNames, colValues);
-    
-    // 读取现有表数据或创建新表
+    std::string val = trim(valueStr);
+    // 处理字符串（单/双引号）
+    if ((val.front() == '\'' && val.back() == '\'') || (val.front() == '"' && val.back() == '"')) {
+        return val.substr(1, val.size() - 2); // 去除引号
+    }
+    // 处理数字（整数/浮点数）
+    if (val.find('.') != std::string::npos) {
+        return std::stod(val);
+    } else if (val == "true") {
+        return true;
+    } else if (val == "false") {
+        return false;
+    } else if (val == "null") {
+        return nullptr;
+    } else {
+        return std::stoi(val);
+    }
+}
+
+// 工具函数：去除字符串前后空格
+std::string Statement::trim(const std::string& str)
+{
+    std::string s = str; 
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) { return !std::isspace(ch); }));
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) { return !std::isspace(ch); }).base(), s.end());
+    return s;
+}
+
+std::vector<std::string> sql::jsondb::Statement::split(const std::string& s, char delimiter)
+{
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+    while (std::getline(tokenStream, token, delimiter))
+    {
+        tokens.push_back(token);
+    }
+
+    return tokens;
+}
+
+
+// 实现带列名的INSERT操作
+size_t Statement::executeInsertWithColumns(const std::string& table, const std::string& columns, const std::string& valuesStr)
+{
+    // 1. 解析列名（如 "name, age" → ["name", "age"]）
+    std::vector<std::string> cols = split(columns, ',');
+    for (auto& col : cols)
+    {
+        trim(col); // 去除空格
+    }
+
+    // 2. 解析多值组（如 "('Bob',12), ('Alice',14)" → 拆分为单个值组）
+    std::vector<std::string> valueGroups = splitValueGroups(valuesStr);
+    if (valueGroups.empty())
+    {
+        throw JsonDbException("No values provided in INSERT statement");
+    }
+
+    // 3. 读取现有表数据（空数组则创建）
     std::string tablePath = connection->getTableFilePath(table);
-    nlohmann::json tableData;
-    
-    if (connection->tableExists(table))
+    nlohmann::json tableData = readTableData(tablePath); // 封装读取JSON的函数
+
+    // 4. 遍历每个值组，生成行数据并插入
+    size_t affectedRows = 0;
+    for (const auto& valueGroup : valueGroups)
     {
-        tableData = readTableData(tablePath);
+        // 解析单个值组（如 "('Bob',12)" → ["'Bob'", "12"]）
+        std::vector<std::string> values = splitValueGroup(valueGroup);
+        if (values.size() != cols.size())
+        {
+            throw JsonDbException("Column-value count mismatch in INSERT");
+        }
+
+        // 生成一行数据（键值对：列名→值）
+        nlohmann::json row = nlohmann::json::object();
+        for (size_t i = 0; i < cols.size(); ++i)
+        {
+            row[cols[i]] = parseValue(values[i]); // 解析值（去除引号、转换类型）
+        }
+
+        tableData.push_back(row);
+        affectedRows++;
     }
-    else
-    {
-        tableData = nlohmann::json::array();
-    }
-    
-    // 添加新行
-    tableData.push_back(newRow);
-    
-    // 写回文件
-    writeTableData(tablePath, tableData);
-    
-    return 1; // INSERT操作通常只影响一行
+
+    // 5. 写入更新后的数据
+    writeTableData(tablePath, tableData); // 封装写入JSON的函数
+    return affectedRows;
 }
 
 // 实现不带列名的INSERT操作
