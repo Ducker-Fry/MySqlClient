@@ -114,7 +114,6 @@ namespace sql
         public:
             Statement(std::shared_ptr<Connection> conn) : connection(conn) {}
             // Execute a SQL query and return a ResultSet
-            ~Statement(){ std::cout<<"Statement destructor called\n";}
             std::shared_ptr<ResultSet> executeQuery(const std::string& sql);
             // Execute a SQL update and return the number of affected rows , for INSERT, UPDATE, DELETE, etc.
             size_t executeUpdate(const std::string& sql);

@@ -29,6 +29,7 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/thirdparty")
 # 收集主程序需要的源文件。
 file(GLOB MAIN_SOURCES "src/*.cpp" "src/input/*.cpp" "src/core/*.cpp" "src/database/*.cpp")
 file(GLOB  MAIN_HEADERS "include/*.h" "include/*/*.h")
+file(GLOB SQLITE_SOURCES "thirdparty/sqlite/sqlite3.c")
 
 # 收集测试需要的源文件。
 file(GLOB TEST_CONSOLE_SOURCE "tests/test_console_input.cpp"  "src/input/input_console.cpp")
@@ -40,7 +41,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 
 # 将源代码添加到此项目的可执行文件。
-add_executable(app ${MAIN_SOURCES} ${MAIN_HEADERS})
+add_executable(app ${MAIN_SOURCES} ${MAIN_HEADERS} ${SQLITE_SOURCES})
 
 # 生成测试可执行文件。
 add_executable(test_console ${TEST_CONSOLE_SOURCE})
