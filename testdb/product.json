@@ -1,8 +1,7 @@
 [
     {
-        " name": "Laptop",
-        " price": 5999.9,
         "id": 1,
-        "name": null
+        "name": "Laptop",
+        "price": 5999.9
     }
 ]

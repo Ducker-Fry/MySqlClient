@@ -145,34 +145,8 @@ TEST_F(JsonDbBaseTest, Statement_ExecuteInsert_CreatesTableAndData) {
     std::vector<nlohmann::json> data = conn->getTableData(tableName);
     EXPECT_EQ(data.size(), 1);
     EXPECT_EQ(data[0]["id"].get<int>(), 1);
-    for (auto& row : data)
-    {
-        for (auto& item : row.items())
-        {
-            std::cout << item.key() << ": " << item.value() << std::endl;
-        }
-    }
-    std::cout<<"----------------"<<std::endl;
-    std::cout<<"name: "<<data[0]["name"]<<std::endl;
-
-    // 修复：将 data 写入文件
-    std::ofstream fs;  // 写入文件推荐用 ofstream（默认支持输出模式）
-    std::string filePath = "E:\\Draft\\MySqlClient\\testdb\\product.json";
-
-    // 用正确的模式打开：输出 + 截断原有内容
-    fs.open(filePath, std::ios::out | std::ios::trunc);
-
-    // 检查文件是否成功打开
-    if (!fs.is_open())
-    {
-        throw std::runtime_error("Failed to open file: " + filePath + " (check path or permissions)");
-    }
-
-    // 写入 JSON 数据（带格式化）
-    fs << std::setw(4) << data;  // nlohmann::json 会自动序列化 vector<json> 为 JSON 数组
-    fs.close();  // 关闭文件，确保数据刷新到磁盘
-    //EXPECT_EQ(data[0]["name"].get<std::string>(), "Laptop");
-    //EXPECT_DOUBLE_EQ(data[0]["price"].get<double>(), 5999.9);
+    EXPECT_EQ(data[0]["name"].get<std::string>(), "Laptop");
+    EXPECT_DOUBLE_EQ(data[0]["price"].get<double>(), 5999.9);
 }
 
 TEST_F(JsonDbBaseTest, Statement_ExecuteQuery_ReturnsFilteredData) {
@@ -263,6 +237,29 @@ TEST_F(JsonDbBaseTest, ResultSetMetaData_GetColumnInfo) {
     EXPECT_EQ(meta->getColumnType(3), DataType::BOOLEAN);
 }
 
+TEST_F(JsonDbBaseTest, Stament_Multiple_Row_Insert)
+{
+    const std::string tableName = "user";
+    createTestTable(tableName);
+    std::shared_ptr<Statement> stmt = conn->createStatement();
+    std::string insertSql = "INSERT INTO " + tableName + " (id, name, age, is_active) VALUES (3, 'Alice', 28, true), (4, 'Charlie', 32, false), (5, 'David', 24, true), (6, 'Eve', 29, false)";
+    stmt->execute(insertSql);
+    std::vector<nlohmann::json> data = conn->getTableData(tableName);
+    EXPECT_EQ(data.size(), 6);
+    // 验证插入的数据
+    EXPECT_EQ(data[0]["name"].get<std::string>(), "Alice");
+    EXPECT_EQ(data[1]["name"].get<std::string>(), "Bob");
+    EXPECT_EQ(data[2]["name"].get<std::string>(), "Charlie");
+    EXPECT_EQ(data[3]["name"].get<std::string>(), "David");
+    EXPECT_EQ(data[4]["name"].get<std::string>(), "Eve");
+
+    // 验证插入的数据
+    EXPECT_EQ(data[0]["age"].get<int>(), 28);
+    EXPECT_EQ(data[1]["age"].get<int>(), 30);
+    EXPECT_EQ(data[2]["age"].get<int>(), 32);
+    EXPECT_EQ(data[3]["age"].get<int>(), 24);
+    EXPECT_EQ(data[4]["age"].get<int>(), 29);
+}
 
 // 测试入口
 int main(int argc, char **argv) {

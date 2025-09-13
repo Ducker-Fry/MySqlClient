@@ -776,7 +776,7 @@ size_t Statement::executeInsertWithColumns(const std::string& table, const std::
     std::vector<std::string> cols = split(columns, ',');
     for (auto& col : cols)
     {
-        trim(col); // 去除空格
+        col = trim(col); // 去除空格
     }
 
     // 2. 解析多值组（如 "('Bob',12), ('Alice',14)" → 拆分为单个值组）
