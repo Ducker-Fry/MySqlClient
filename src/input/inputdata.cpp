@@ -1,7 +1,3 @@
-#include "inputdata.h"
-#include "inputdata.h"
-#include "inputdata.h"
-#include "inputdata.h"
 #include<input/inputdata.h>
 
 void InputManager::addSource(const std::shared_ptr<IInputSource>& source)

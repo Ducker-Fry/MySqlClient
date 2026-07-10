@@ -1,4 +1,4 @@
-#include "input_console.h"
+#include <input/input_console.h>
 #include<csignal>
 
 InputData ConsoleInputSource::readInput()

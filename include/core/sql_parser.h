@@ -1,7 +1,10 @@
 #pragma once
+
+#include <memory>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
+
 #include <input/inputdata.h>
 
 enum class SqlType
@@ -22,17 +25,18 @@ protected:
     std::string table;
     std::vector<std::string> columns;
     std::string type;
+
 public:
     SqlParseResult() = default;
     virtual ~SqlParseResult() = default;
 
-    // Setter和Getter（方便赋值和测试）
     void setDatabase(const std::string& db) { database = db; }
     void setTable(const std::string& t) { table = t; }
     void setColumns(const std::vector<std::string>& cols) { columns = cols; }
     void setType(const std::string& t) { type = t; }
 
-    std::string getDatabase() const { return database; } std::string getTable() const { return table; }
+    std::string getDatabase() const { return database; }
+    std::string getTable() const { return table; }
     std::vector<std::string> getColumns() const { return columns; }
     std::string getType() const { return type; }
 };
@@ -46,11 +50,11 @@ private:
     std::vector<std::string> groupByColumns;
     std::string havingClause;
     std::string rawQuery;
-    SqlType operationType = SqlType::UNKNOWN; // SELECT, INSERT, UPDATE, DELETE
+    SqlType operationType = SqlType::UNKNOWN;
+
 public:
     SqlParseResultQuery() = default;
 
-    // Setter和Getter
     void setWhereClause(const std::string& where) { whereClause = where; }
     void setOrderByClause(const std::string& order) { orderByClause = order; }
     void setLimitClause(const std::string& limit) { limitClause = limit; }
@@ -65,22 +69,22 @@ public:
     std::vector<std::string> getGroupByColumns() const { return groupByColumns; }
     std::string getHavingClause() const { return havingClause; }
     std::string getRawQuery() const { return rawQuery; }
-    SqlType getOperationType() const { return operationType ; }
+    SqlType getOperationType() const { return operationType; }
 };
 
 class SqlParseResultImport : public SqlParseResult
 {
 private:
     std::unordered_map<std::string, std::vector<std::string>> data;
+
 public:
     SqlParseResultImport() = default;
 };
 
-
-// SQL解析接口
 class ISqlParser
 {
 public:
+    virtual ~ISqlParser() = default;
     virtual std::shared_ptr<SqlParseResult> parse(InputData& input) = 0;
 };
 

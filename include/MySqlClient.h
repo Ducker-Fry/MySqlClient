@@ -1,10 +1,6 @@
-﻿// MySqlClient.h: 标准系统包含文件的包含文件
-// 或项目特定的包含文件。
-
 #pragma once
 
-#include <iostream>
-#include<model/QueryResult.h>
-#include<model/DataTable.h>
-
-// TODO: 在此处引用程序需要的其他标头。
+#include <core/sql_parser.h>
+#include <database/json_driver.h>
+#include <database/sqlite_driver.h>
+#include <query_app.h>
