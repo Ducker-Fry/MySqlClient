@@ -1,15 +1,17 @@
 #pragma once
-//模仿mysql的接口，实现sqlite的接口
-#include <exception>
+
+#include <json.hpp>
+#include <sqlite/sqlite3.h>
+
+#include <memory>
+#include <stdexcept>
 #include <string>
-
-
+#include <vector>
 
 namespace sql
 {
     namespace sqlite
     {
-        //Forward Declaration
         class Driver;
         class Connection;
         class Statement;
@@ -28,92 +30,38 @@ namespace sql
             UNKOWN
         };
 
-        //exception class
-        class SQLiteException : public std::exception
+        class SQLiteException : public std::runtime_error
         {
         private:
-            std::string errMsg_;   // 完整错误信息（包含上下文）
-            int errorCode_;        // SQLite错误码（如SQLITE_ERROR、SQLITE_BUSY等）
-            std::string fileName_; // 发生错误的源文件（可选，调试用）
-            int lineNumber_;       // 发生错误的行号（可选，调试用）
+            int errorCode_;
 
         public:
-            // 1. 基础构造：仅错误消息（适用于自定义错误）
-            explicit SQLiteException(const std::string& errMsg)
-                : errMsg_(errMsg), errorCode_(-1), fileName_(""), lineNumber_(-1)
+            explicit SQLiteException(const std::string& errMsg, int errorCode = -1)
+                : std::runtime_error(errMsg),
+                  errorCode_(errorCode)
             {
             }
 
-            // 2. SQLite原生错误构造：包含错误码和SQLite返回的消息
-            SQLiteException(int errcode, const std::string& errMsg)
-                : errMsg_(errMsg), errorCode_(errcode), fileName_(""), lineNumber_(-1)
+            explicit SQLiteException(sqlite3* db)
+                : std::runtime_error(sqlite3_errmsg(db)),
+                  errorCode_(sqlite3_errcode(db))
             {
             }
 
-            // 3. 带位置信息的构造：包含文件名和行号（调试时定位错误位置）
-            SQLiteException(int errcode, const std::string& errMsg, const std::string& fileName, int lineNumber)
-                : errMsg_(errMsg), errorCode_(errcode), fileName_(fileName), lineNumber_(lineNumber)
-            {
-            }
-
-            // 4. 从SQLite数据库句柄构造（最常用，自动提取错误码和消息）
-            explicit SQLiteException(sqlite3* db, const std::string& fileName = "", int lineNumber = -1)
-                : errorCode_(sqlite3_errcode(db)),
-                errMsg_(sqlite3_errmsg(db)),
-                fileName_(fileName),
-                lineNumber_(lineNumber)
-            {
-            }
-
-            // 重写what()方法：返回完整错误信息（C风格字符串）
-            const char* what() const noexcept override
-            {
-                return errMsg_.c_str();
-            }
-
-            // 获取SQLite错误码（便于根据错误类型处理）
-            int getErrorCode() const noexcept
-            {
-                return errorCode_;
-            }
-
-            // 获取错误发生的文件名（调试用）
-            const std::string& getFileName() const noexcept
-            {
-                return fileName_;
-            }
-
-            // 获取错误发生的行号（调试用）
-            int getLineNumber() const noexcept
-            {
-                return lineNumber_;
-            }
-
-            // 获取包含位置信息的详细错误描述（测试和日志用）
-            std::string getDetailedMessage() const
-            {
-                std::string detail = "SQLite Error [" + std::to_string(errorCode_) + "]: " + errMsg_;
-                if (!fileName_.empty() && lineNumber_ > 0)
-                {
-                    detail += " (at " + fileName_ + ":" + std::to_string(lineNumber_) + ")";
-                }
-                return detail;
-            }
+            int getErrorCode() const noexcept { return errorCode_; }
         };
 
-        // Driver class (singleton)
         class Driver
         {
         private:
-            // 单例：私有构造函数 + 静态实例
             Driver() = default;
-            Driver(const Driver&) = delete;               // 禁止拷贝构造
-            Driver& operator=(const Driver&) = delete;    // 禁止赋值运算
+            Driver(const Driver&) = delete;
+            Driver& operator=(const Driver&) = delete;
 
-            static std::unique_ptr<Driver> instance_;     // 单例实例（智能指针管理）
+            static std::unique_ptr<Driver> instance_;
+            bool authenticate(const std::string& user, const std::string& password);
 
         public:
-            // 获取单例实例（线程安全简化版）
             static Driver& getInstance()
             {
                 if (!instance_)
@@ -123,13 +71,124 @@ namespace sql
                 return *instance_;
             }
 
-            // 核心方法：创建数据库连接（返回智能指针，自动管理生命周期）
-            // 参数：数据库URL（如"sqlite://test.db"）、用户名、密码（SQLite可能不需要后两者）
             std::unique_ptr<Connection> connect(
                 const std::string& url,
                 const std::string& user = "",
-                const std::string& password = ""
-            );
+                const std::string& password = "");
+        };
+
+        class Connection
+        {
+        private:
+            sqlite3* db_ = nullptr;
+            std::string dbName_;
+            bool autoCommit_ = true;
+            int connectTimeout_ = 0;
+            std::string encoding_ = "UTF-8";
+            bool isValid_ = false;
+            std::string url_;
+
+        public:
+            Connection() = default;
+            Connection(sqlite3* db, std::string url, const std::string& dbName);
+            Connection(const Connection&) = delete;
+            Connection& operator=(const Connection&) = delete;
+            Connection(Connection&& other) noexcept;
+            Connection& operator=(Connection&& other) noexcept;
+            ~Connection();
+
+            std::unique_ptr<Statement> createStatement();
+            std::unique_ptr<PreparedStatement> prepareStatement(const std::string& sql);
+
+            void setAutoCommit(bool autoCommit) { autoCommit_ = autoCommit; }
+            bool getAutoCommit() const { return autoCommit_; }
+            void commit();
+            void rollback();
+
+            bool isValid() const { return isValid_; }
+            void close();
+            void* getNativeHandle() const { return db_; }
+            sqlite3* rawHandle() const { return db_; }
+            std::string getDatabaseName() const { return dbName_; }
+            void setConnectTimeout(int seconds);
+            std::string getEncoding() const { return encoding_; }
+        };
+
+        class ResultSetMetadata
+        {
+        private:
+            std::vector<std::pair<std::string, DataType>> columns_;
+
+        public:
+            explicit ResultSetMetadata(std::vector<std::pair<std::string, DataType>> columns = {})
+                : columns_(std::move(columns))
+            {
+            }
+
+            size_t getColumnCount() const { return columns_.size(); }
+            std::string getColumnName(size_t index) const;
+            DataType getColumnType(size_t index) const;
+        };
+
+        class ResultSet
+        {
+        private:
+            std::vector<nlohmann::json> rows_;
+            std::shared_ptr<ResultSetMetadata> metaData_;
+            size_t currentIndex_ = 0;
+            bool hasCurrentRow_ = false;
+
+            void ensureCurrentRow() const;
+
+        public:
+            ResultSet(
+                std::vector<nlohmann::json> rows,
+                std::shared_ptr<ResultSetMetadata> metaData);
+
+            bool next();
+            int getInt(const std::string& columnLabel);
+            float getFloat(const std::string& columnLabel);
+            std::string getString(const std::string& columnLabel);
+            bool getBoolean(const std::string& columnLabel);
+            std::string getDateTime(const std::string& columnLabel);
+            std::shared_ptr<ResultSetMetadata> getMetaData() const { return metaData_; }
+            void reset();
+        };
+
+        class Statement
+        {
+        private:
+            Connection* connection_ = nullptr;
+
+        public:
+            explicit Statement(Connection* connection) : connection_(connection) {}
+
+            std::unique_ptr<ResultSet> executeQuery(const std::string& sql);
+            size_t executeUpdate(const std::string& sql);
+            bool execute(const std::string& sql);
+        };
+
+        class PreparedStatement
+        {
+        private:
+            Connection* connection_ = nullptr;
+            sqlite3_stmt* statement_ = nullptr;
+
+        public:
+            PreparedStatement(Connection* connection, const std::string& sql);
+            PreparedStatement(const PreparedStatement&) = delete;
+            PreparedStatement& operator=(const PreparedStatement&) = delete;
+            ~PreparedStatement();
+
+            void setInt(size_t index, int value);
+            void setFloat(size_t index, float value);
+            void setString(size_t index, const std::string& value);
+            void setBoolean(size_t index, bool value);
+            void setDateTime(size_t index, const std::string& value);
+
+            std::unique_ptr<ResultSet> executeQuery();
+            size_t executeUpdate();
+            bool execute();
         };
     }
 }

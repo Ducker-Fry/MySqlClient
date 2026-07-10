@@ -1,18 +1,17 @@
-// 模仿mysql_connection.h的核心类结构
 #pragma once
-#include <string>
-#include <vector>
+
+#include <json.hpp>
+
 #include <map>
 #include <memory>
-#include <json.hpp>
 #include <stdexcept>
-#include <iostream>
+#include <string>
+#include <vector>
 
 namespace sql
 {
     namespace jsondb
     {
-        // Forward declaration of JsonDriverImpl
         class Connection;
         class Statement;
         class PreparedStatement;
@@ -20,8 +19,7 @@ namespace sql
         class ResultSetMetaData;
         class DatabaseMetaData;
 
-        //data type
-        enum class  DataType
+        enum class DataType
         {
             INT,
             FLOAT,
@@ -32,73 +30,70 @@ namespace sql
             UNKOWN
         };
 
-        // basic exception class for JSON database errors
         class JsonDbException : public std::runtime_error
         {
         public:
             explicit JsonDbException(const std::string& message) : std::runtime_error(message) {}
         };
 
-        // JsonDriver class (singleton pattern)
         class Driver
         {
-            public:
+        public:
             static Driver& getInstance()
             {
                 static Driver instance;
                 return instance;
             }
-            std::shared_ptr<Connection> connect(const std::string& dbPath,std::string user,std::string passwd);
+
+            std::shared_ptr<Connection> connect(
+                const std::string& dbPath,
+                std::string user = "",
+                std::string passwd = "");
         };
 
-        //Connection class for managing database connections
         class Connection : public std::enable_shared_from_this<Connection>
         {
         private:
             std::string dbPath;
-            bool closed;
-            bool autoCommit;
+            bool closed = false;
+            bool autoCommit = true;
+
         public:
-            Connection(const std::string& dbPath,std::string user,std::string passwd);
-            ~Connection();
-            void close();
+            Connection(const std::string& dbPath, std::string user, std::string passwd);
+            ~Connection() noexcept;
+
+            void close() noexcept;
             bool isClosed() const { return closed; }
             std::shared_ptr<Statement> createStatement();
             std::shared_ptr<PreparedStatement> prepareStatement(const std::string& sql);
-            void setAutoCommit(bool autoCommit) { this->autoCommit = autoCommit; }
+            void setAutoCommit(bool enabled) { autoCommit = enabled; }
             bool getAutoCommit() const { return autoCommit; }
             void commit();
             void rollback();
-            // check user authentication
             bool authenticate(std::string user, std::string passwd);
-            // check if connection is valid , partly check if file exists
             bool validateConnection() const;
-            // check if the table exists
-            bool tableExists(const std::string& tableName) const;   
-            // get all column names of the specified table
+            bool tableExists(const std::string& tableName) const;
             std::vector<std::string> getColumnNames(const std::string& tableName) const;
-            //get table json file path
             std::string getTableFilePath(const std::string& tableName) const;
             std::string getDbPath() const { return dbPath; }
             std::vector<nlohmann::json> getTableData(const std::string& tableName) const;
         };
 
-        //Statement class for executing SQL statements
         class Statement
         {
         private:
             std::shared_ptr<Connection> connection;
-            
-            // Helper methods for executeUpdate
+
             size_t executeUpdateImpl(const std::string& table, const std::string& setClause, const std::string& whereClause);
             size_t executeDeleteImpl(const std::string& table, const std::string& whereClause);
             size_t executeInsertWithColumns(const std::string& table, const std::string& columns, const std::string& values);
             size_t executeInsertWithoutColumns(const std::string& table, const std::string& values);
-            
-            // Utility methods
+
             std::map<std::string, std::string> parseSetClause(const std::string& setClause);
             std::vector<std::string> parseList(const std::string& list);
-            nlohmann::json createRowFromValues(const std::vector<std::string>& colNames, const std::vector<std::string>& colValues);
+            nlohmann::json createRowFromValues(
+                const std::vector<std::string>& colNames,
+                const std::vector<std::string>& colValues);
             nlohmann::json readTableData(const std::string& tablePath);
             void writeTableData(const std::string& tablePath, const nlohmann::json& tableData);
             bool evaluateCondition(const nlohmann::json& row, const std::string& condition);
@@ -107,84 +102,96 @@ namespace sql
             nlohmann::json parseValue(const std::string& valueStr);
             std::string trim(const std::string& s);
             std::vector<std::string> split(const std::string& s, char delimiter);
-
-            // Get table name from full table specification
             std::string extractTableName(const std::string& tableSpec);
 
         public:
-            Statement(std::shared_ptr<Connection> conn) : connection(conn) {}
-            // Execute a SQL query and return a ResultSet
+            explicit Statement(std::shared_ptr<Connection> conn) : connection(std::move(conn)) {}
+
             std::shared_ptr<ResultSet> executeQuery(const std::string& sql);
-            // Execute a SQL update and return the number of affected rows , for INSERT, UPDATE, DELETE, etc.
             size_t executeUpdate(const std::string& sql);
-            // Generic execute method for any SQL statement
             bool executeCreate(const std::string& sql);
             bool execute(const std::string& sql);
         };
 
-        //PreparedStatement class for executing parameterized SQL statements, combined with Statement not inheritance
         class PreparedStatement
         {
         private:
-            std::string placeholder = "?";
             std::shared_ptr<Connection> connection;
             std::string sql;
-            std::vector<std::string> parameters; // Store parameters as strings for simplicity
+            std::vector<std::string> parameters;
+            Statement stmt;
+
             void bindParameter(size_t index, const std::string& value);
-            Statement stmt; // composition with Statement
+            std::string materializeSql() const;
+
         public:
-            PreparedStatement(std::shared_ptr<Connection> conn, const std::string& sql) : connection(conn), sql(sql), stmt(conn) {}
+            PreparedStatement(std::shared_ptr<Connection> conn, const std::string& sql);
+
             void setInt(size_t index, int value);
             void setFloat(size_t index, float value);
             void setString(size_t index, const std::string& value);
-            void setBoolean(size_t index, bool value) { bindParameter(index, value ? "true" : "false");}
-            void setDateTime(size_t index, const std::string& value); // Expecting ISO 8601 format
+            void setBoolean(size_t index, bool value) { bindParameter(index, value ? "true" : "false"); }
+            void setDateTime(size_t index, const std::string& value);
+
             std::shared_ptr<ResultSet> executeQuery();
             size_t executeUpdate();
             bool execute();
         };
 
-        //ResultSet class for handling query results
         class ResultSet
         {
         private:
-            std::vector<nlohmann::json> rows; // Each row is a JSON object
+            std::vector<nlohmann::json> rows;
             std::shared_ptr<ResultSetMetaData> metaData;
-            size_t currentIndex;
+            size_t currentIndex = 0;
+            bool hasCurrentRow = false;
+
             bool is_date(const std::string& str);
+            void ensureCurrentRow() const;
+
         public:
-            ResultSet(const std::vector<nlohmann::json>& data);
+            explicit ResultSet(
+                const std::vector<nlohmann::json>& data,
+                const std::vector<std::string>& preferredColumns = {});
+
             bool next();
             int getInt(const std::string& columnLabel);
             float getFloat(const std::string& columnLabel);
             std::string getString(const std::string& columnLabel);
             bool getBoolean(const std::string& columnLabel);
-            std::string getDateTime(const std::string& columnLabel); // Return as ISO 8601 string
+            std::string getDateTime(const std::string& columnLabel);
             std::shared_ptr<ResultSetMetaData> getMetaData() const { return metaData; }
-            void reset() { currentIndex = 0; }
+            void reset()
+            {
+                currentIndex = 0;
+                hasCurrentRow = false;
+            }
         };
 
-        //ResultSetMetaData class for metadata about ResultSet
         class ResultSetMetaData
         {
         private:
             friend class ResultSet;
-            std::vector<std::pair<std::string, DataType>> columns; // column name and data type
+            std::vector<std::pair<std::string, DataType>> columns;
+
         public:
-            ResultSetMetaData(const std::vector<std::pair<std::string, DataType>> cols) : columns(std::move(cols)) {}
-            ResultSetMetaData();
+            explicit ResultSetMetaData(std::vector<std::pair<std::string, DataType>> cols = {})
+                : columns(std::move(cols))
+            {
+            }
+
             size_t getColumnCount() const { return columns.size(); }
             std::string getColumnName(size_t index) const;
             DataType getColumnType(size_t index) const;
         };
 
-        //DatabaseMetaData class for metadata about the database
         class DatabaseMetaData
         {
         private:
             std::shared_ptr<Connection> connection;
+
         public:
-            DatabaseMetaData(Connection* conn) : connection(conn) {}
+            explicit DatabaseMetaData(std::shared_ptr<Connection> conn) : connection(std::move(conn)) {}
             std::vector<std::string> getTables();
         };
     }

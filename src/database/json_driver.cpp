@@ -1,1089 +1,1136 @@
-// json_driver_impl.cpp
 #include <database/json_driver.h>
-#include <fstream>
-#include <filesystem>
-#include <regex>
 
-using namespace sql::jsondb;
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <regex>
+#include <sstream>
+
 namespace fs = std::filesystem;
 
-std::shared_ptr<Connection> Driver::connect(const std::string& dbPath, std::string user, std::string passwd)
+namespace
 {
-    auto conn = std::make_shared<Connection>(dbPath, user, passwd);
-    return conn;
+std::string Trim(const std::string& value)
+{
+    const std::string whitespace = " \t\r\n";
+    const std::size_t start = value.find_first_not_of(whitespace);
+    if (start == std::string::npos)
+    {
+        return "";
+    }
+
+    const std::size_t end = value.find_last_not_of(whitespace);
+    return value.substr(start, end - start + 1);
 }
 
-
-std::string Connection::getTableFilePath(const std::string& tableName) const
+std::string ToLowerCopy(const std::string& value)
 {
-    auto path = fs::path(dbPath);
-    path /= tableName + ".json";
+    std::string lower = value;
+    std::transform(
+        lower.begin(),
+        lower.end(),
+        lower.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return lower;
+}
+
+std::string EscapeSqlString(const std::string& value)
+{
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (const char ch : value)
+    {
+        escaped += ch;
+        if (ch == '\'')
+        {
+            escaped += '\'';
+        }
+    }
+    return escaped;
+}
+
+std::string RemoveTrailingSemicolon(const std::string& sql)
+{
+    std::string trimmed = Trim(sql);
+    if (!trimmed.empty() && trimmed.back() == ';')
+    {
+        trimmed.pop_back();
+        trimmed = Trim(trimmed);
+    }
+    return trimmed;
+}
+
+std::string JsonSchemaFilePath(const std::string& dbPath, const std::string& tableName)
+{
+    fs::path path(dbPath);
+    path /= tableName + ".schema.json";
     return path.string();
 }
 
-std::vector<nlohmann::json> sql::jsondb::Connection::getTableData(const std::string& tableName) const
-{
-    auto path = getTableFilePath(tableName);
-    if (!fs::exists(path))
-    {
-        throw JsonDbException("Table does not exist: " + tableName);
-    }
-
-    std::ifstream file(path);
-    if (!file.is_open())
-    {
-        throw JsonDbException("Failed to open table file: " + path);
-    }
-    else
-    {
-        std::vector<nlohmann::json> data;
-        nlohmann::json json_data;
-        file >> json_data;
-        for (const auto& item : json_data)
-        {
-            data.push_back(item);
-        }
-        file.close();
-        return data;
-    }
-}
-
-Connection::Connection(const std::string& dbPath, std::string user, std::string passwd)
-{
-    this->dbPath = dbPath;
-    this->closed = false;
-    this->autoCommit = true;
-    
-    // authenticate user
-    if(!authenticate(user, passwd))
-        throw JsonDbException("Authentication failed for user: " + user);
-
-    // check if dbPath exists, if not create it
-    auto path = fs::path(dbPath);
-    if (!fs::exists(path))
-    {
-        fs::create_directories(path);
-    }
-    else if (!fs::is_directory(path))
-    {
-        throw JsonDbException("Database path is not a directory: " + dbPath);
-    }
-}
-
-Connection::~Connection()
-{
-    try
-    {
-        if (!closed)
-        {
-            close();
-        }
-    }
-    catch (...)
-    {
-        // handle exception
-        throw JsonDbException("Exception in Connection::~Connection()");
-    }
-}
-
-void Connection::close()
-{
-    if (!closed)
-    {
-        closed = true;
-        // 可以在这里添加任何需要的资源清理代码
-    }
-}
-
-std::shared_ptr<Statement> Connection::createStatement()
-{
-    return std::make_shared<Statement>(shared_from_this());
-}
-
-std::shared_ptr<PreparedStatement> Connection::prepareStatement(const std::string& sql)
-{
-    return std::make_shared<PreparedStatement>(shared_from_this(), sql);
-}
-
-void Connection::commit()
-{
-    // Put commit logic here and handle exceptions
-    // I'll complete this later if needed
-}
-
-void Connection::rollback()
-{
-    // Put rollback logic here and handle exceptions
-    // I'll complete this later
-}
-
-bool Connection::authenticate(std::string user, std::string passwd)
-{
-    // Put authentication logic here and handle exceptions
-    // I'll complete this later and use common configuration files. the user and passwd are stored in a specific file
-    // return true to ensure the connection is established and program runs smoothly
-    return true;
-}
-
-bool Connection::validateConnection() const
-{
-    // Put validation logic here and handle exceptions
-    // I'll realize more complicated logic later
-    if(closed) return false;
-    return true;
-}
-
-bool Connection::tableExists(const std::string& tableName) const
-{
-    auto path = getTableFilePath(tableName);
-    return fs::exists(path);
-}
-
-std::vector<std::string> Connection::getColumnNames(const std::string& tableName) const
-{
-    // 获取表文件路径
-    std::string tablePath = getTableFilePath(tableName);
-    
-    // 检查文件是否存在
-    if (!std::filesystem::exists(tablePath)) {
-        throw JsonDbException("Table does not exist: " + tableName);
-    }
-    
-    // 读取 JSON 文件
-    std::ifstream file(tablePath);
-    if (!file.is_open()) {
-        throw JsonDbException("Failed to open table file: " + tablePath);
-    }
-    
-    // 解析 JSON 数据
-    nlohmann::json tableData;
-    try {
-        file >> tableData;
-    } catch (const nlohmann::json::parse_error& e) {
-        throw JsonDbException("Failed to parse JSON file: " + std::string(e.what()));
-    }
-    
-    // 检查 JSON 是否是数组
-    if (!tableData.is_array() || tableData.empty()) {
-        throw JsonDbException("Invalid table format: table data should be a non-empty array");
-    }
-    
-    // 获取第一行的所有键作为列名
-    std::vector<std::string> columns;
-    for (auto it = tableData[0].begin(); it != tableData[0].end(); ++it) {
-        columns.push_back(it.key());
-    }
-    
-    return columns;
-}
-
-std::shared_ptr<ResultSet> Statement::executeQuery(const std::string& sql)
-{
-    // parse sql statement and use std::regex to match the pattern
-    // 允许结尾有可选的分号和空白字符
-    std::regex selectPattern(R"(SELECT\s+(.*?)\s+FROM\s+(.*?)\s+WHERE\s+(.*?)\s*;?)", std::regex::icase);
-
-    std::smatch matches;
-    //handle exception
-    if (!std::regex_match(sql, matches, selectPattern))
-    {
-        throw JsonDbException("Invalid SQL statement: " + sql);
-    }
-
-    // execute query and return result set
-    // extract columns , table and condition from the matches
-    std::string columns = matches[1];
-    std::string table = matches[2];
-    std::string condition = matches[3];
-
-    //extract columns
-    std::vector<std::string> columnNames;
-    if (columns == "*")
-    {
-        columnNames = connection->getColumnNames(table);
-    }
-    else
-    {
-        std::regex columnPattern(R"((\w+)(?:\s*,\s*(\w+))*)");
-        std::sregex_iterator bgn = std::sregex_iterator(columns.begin(), columns.end(), columnPattern);
-        std::regex_iterator end = std::sregex_iterator();
-        for (std::regex_iterator it = bgn; it != end; ++it)
-        {
-            columnNames.push_back((*it)[1].str());
-        }
-    }
-
-    //extract table
-    if (table == "")
-    {
-        throw JsonDbException("Table name is required in SELECT statement");
-    }
-    else
-    {
-        // 优化后正则：允许前后空格，匹配最后一个点后的表名
-        std::regex tablePattern(R"(\s*((\w+)\.)?(\w+)\s*)");
-        std::smatch tableMatch;
-
-        // 用 regex_match 确保全字符串匹配（避免部分匹配问题）
-        if (!std::regex_match(table, tableMatch, tablePattern))
-        {
-            throw JsonDbException("Invalid table name: " + table);
-        }
-        else
-        {
-            table = tableMatch[3].str();
-        }
-    }
-
-    // 获取表数据
-    std::vector<nlohmann::json> tableData = connection->getTableData(table);
-
-    // 筛选符合条件的数据
-    std::vector<nlohmann::json> filteredData;
-
-
-    for (const auto& row : tableData)
-    {
-        bool match = true;
-        // 解析条件并检查每行数据
-        std::regex condPattern(R"((\w+)\s*(=|>|<|>=|<=|!=)\s*(['"]?)([^'"]*)\3)");
-        std::smatch condMatch;
-        if (std::regex_match(condition, condMatch, condPattern))
-        {
-            std::string condColumn = condMatch[1].str();
-            std::string condOp = condMatch[2].str();
-            std::string condValue = condMatch[4].str();
-
-            if (row.is_object())  // 修正：检查是否为对象类型
-            {
-                nlohmann::json columnValue = row[condColumn];
-                bool conditionMet = false;
-
-                if (columnValue.is_string())
-                {
-                    if (condOp == "=") conditionMet = columnValue.get<std::string>() == condValue;
-                    else if (condOp == "!=") conditionMet = columnValue.get<std::string>() != condValue;
-                }
-                else if (columnValue.is_number())
-                {
-                    double numValue = columnValue.get<double>();
-                    double condNumValue = std::stod(condValue);
-                    if (condOp == "=") conditionMet = numValue == condNumValue;
-                    else if (condOp == "!=") conditionMet = numValue != condNumValue;
-                    else if (condOp == ">") conditionMet = numValue > condNumValue;
-                    else if (condOp == "<") conditionMet = numValue < condNumValue;
-                    else if (condOp == ">=") conditionMet = numValue >= condNumValue;
-                    else if (condOp == "<=") conditionMet = numValue <= condNumValue;
-                }
-
-                match = conditionMet;
-            }
-            else
-            {
-                match = false;
-            }
-        }
-        else
-        {
-            match = false;
-        }
-
-        if (match)
-        {
-            filteredData.push_back(row);
-        }
-    }
-
-    // 创建并返回结果集
-    auto resultSet = std::make_shared<ResultSet>(filteredData);
-    return resultSet;
-}
-
-
-// 主函数：判断SQL语句类型并调用相应的实现函数
-size_t Statement::executeUpdate(const std::string& sql)
-{
-    // parse sql statement and use std::regex to match the pattern
-    std::regex updatePattern(R"(UPDATE\s+(.*?)\s+SET\s+(.*?)\s+WHERE\s+(.*?)\s*(?:;)?$)", std::regex::icase);
-    std::regex deletePattern(R"(DELETE\s+FROM\s+(.*?)\s+WHERE\s+(.*?)\s*(?:;)?$)", std::regex::icase);
-    // 支持多值的INSERT正则
-    std::regex insertPattern(R"(INSERT\s+INTO\s+(.*?)\s+\((.*?)\)\s+VALUES\s+(\((?:[^()]+|\([^()]*\))*\)(?:\s*,\s*\((?:[^()]+|\([^()]*\))*\))*)\s*(?:;)?$)", std::regex::icase);
-    std::regex insertNoColumnsPattern(R"(INSERT\s+INTO\s+(.*?)\s+VALUES\s+(\((?:[^()]+|\([^()]*\))*\)(?:\s*,\s*\((?:[^()]+|\([^()]*\))*\))*)\s*(?:;)?$)", std::regex::icase);
-
-    std::smatch matches;
-    size_t affectedRows = 0;
-
-    // 判断SQL语句类型并调用相应的实现函数
-    if (std::regex_match(sql, matches, updatePattern))
-    {
-        std::string table = extractTableName(matches[1]);
-        std::string setClause = matches[2];
-        std::string whereClause = matches[3];
-        affectedRows = executeUpdateImpl(table, setClause, whereClause);
-    }
-    else if (std::regex_match(sql, matches, deletePattern))
-    {
-        std::string table = extractTableName(matches[1]);
-        std::string whereClause = matches[2];
-        affectedRows = executeDeleteImpl(table, whereClause);
-    }
-    else if (std::regex_match(sql, matches, insertPattern))
-    {
-        std::string table = extractTableName(matches[1]);
-        std::string columns = matches[2];
-        std::string values = matches[3]; // 多值组字符串（如"(v1), (v2)"）
-        affectedRows = executeInsertWithColumns(table, columns, values);
-    }
-    else if (std::regex_match(sql, matches, insertNoColumnsPattern))
-    {
-        std::string table = extractTableName(matches[1]);
-        std::string values = matches[2]; // 多值组字符串
-        affectedRows = executeInsertWithoutColumns(table, values); // 需同步修改此函数支持多值
-    }
-    else
-    {
-        throw JsonDbException("Invalid SQL statement: " + sql);
-    }
-
-    return affectedRows;
-}
-
-bool sql::jsondb::Statement::executeCreate(const std::string& sql)
-{
-    {
-        // 解析SQL语句，判断是创建数据库还是创建表
-        std::string lower_sql = sql;
-        std::transform(lower_sql.begin(), lower_sql.end(), lower_sql.begin(), ::tolower);
-
-        // 定义正则表达式模式
-        std::regex db_regex(R"(create\s+database\s+([^;]+))");
-        std::regex table_regex(R"(create\s+table\s+(\w+)\s*\((.*?)\))");
-        std::smatch match;
-
-        if (std::regex_search(lower_sql, match, db_regex))
-        {
-            // 提取数据库名称
-            std::string db_name = match[1].str();
-            // 去除可能的空格
-            db_name.erase(std::remove_if(db_name.begin(), db_name.end(), ::isspace), db_name.end());
-
-            // 创建数据库文件夹
-            std::string db_path = "./" + db_name; // 默认在当前项目目录下
-            if (std::filesystem::exists(db_path))
-            {
-                return false; // 数据库已存在
-            }
-            std::filesystem::create_directories(db_path);
-            return true;
-        }
-        else if (std::regex_search(lower_sql, match, table_regex))
-        {
-            // 提取表名
-            std::string table_name = match[1].str();
-            // 去除表名前后可能的空格（增强兼容性）
-            table_name.erase(table_name.begin(), std::find_if(table_name.begin(), table_name.end(), [](int ch) {
-                return !std::isspace(ch);
-                }));
-            table_name.erase(std::find_if(table_name.rbegin(), table_name.rend(), [](int ch) {
-                return !std::isspace(ch);
-                }).base(), table_name.end());
-
-            // 创建表文件（JSON文件）
-            std::string table_path = connection->getDbPath() + "/" + table_name + ".json";
-            if (std::filesystem::exists(table_path))
-            {
-                return false; // 表已存在
-            }
-            std::ofstream file(table_path);
-            file << "[]"; // 初始化为空数组
-            file.close();
-            return true;
-        }
-
-        return false; // 不支持的SQL语句
-    }
-}
-bool sql::jsondb::Statement::execute(const std::string& sql)
-{
-    std::regex operationPattern(R"(^(?:SELECT|UPDATE|DELETE|INSERT|CREATE)\s)", std::regex::icase);
-    std::smatch matches;
-    if (std::regex_search(sql, matches, operationPattern))
-    {
-        if (::toupper(matches[0].str()[0]) == 'S')
-        {
-            return executeQuery(sql) != nullptr;
-        }
-        else if (::toupper(matches[0].str()[0]) == 'C')
-        {
-            return executeCreate(sql);
-        }
-        else
-        {
-            return executeUpdate(sql) > 0;
-        }
-    }
-    else
-    {
-        throw JsonDbException("Invalid SQL statement: " + sql);
-    }
-}
-
-// 从完整表规范中提取表名
-std::string Statement::extractTableName(const std::string& tableSpec)
-{
-    // 修复正则：处理可选库名前缀，避免贪婪匹配吞噬表名，修正拼写错误
-    std::regex tablePattern(R"(\s*(?:[^.]+\.)?([A-Za-z0-9_]+)\s*)");
-    std::smatch tableMatch;
-
-    if (!std::regex_match(tableSpec, tableMatch, tablePattern))
-    {
-        throw JsonDbException("Invalid table name: " + tableSpec);
-    }
-
-    return tableMatch[1].str();
-}
-
-// 解析SET子句
-std::map<std::string, std::string> Statement::parseSetClause(const std::string &setClause)
-{
-    std::map<std::string, std::string> updates;
-    size_t start = 0, end = 0;
-    
-    while ((end = setClause.find(',', start)) != std::string::npos)
-    {
-        std::string pair = setClause.substr(start, end - start);
-        size_t eqPos = pair.find('=');
-        if (eqPos != std::string::npos)
-        {
-            std::string col = pair.substr(0, eqPos);
-            std::string val = pair.substr(eqPos + 1);
-            // 去除空格和引号
-            col.erase(0, col.find_first_not_of(" \t"));
-            col.erase(col.find_last_not_of(" \t") + 1);
-            val.erase(0, val.find_first_not_of(" \t'\""));
-            val.erase(val.find_last_not_of(" \t'\"") + 1);
-            updates[col] = val;
-        }
-        start = end + 1;
-    }
-    
-    // 处理最后一对
-    std::string lastPair = setClause.substr(start);
-    size_t eqPos = lastPair.find('=');
-    if (eqPos != std::string::npos)
-    {
-        std::string col = lastPair.substr(0, eqPos);
-        std::string val = lastPair.substr(eqPos + 1);
-        col.erase(0, col.find_first_not_of(" \t"));
-        col.erase(col.find_last_not_of(" \t") + 1);
-        val.erase(0, val.find_first_not_of(" \t'\""));
-        val.erase(val.find_last_not_of(" \t'\"") + 1);
-        updates[col] = val;
-    }
-    
-    return updates;
-}
-
-// 解析逗号分隔的列表（用于列名和值）
-std::vector<std::string> Statement::parseList(const std::string& list)
+std::vector<std::string> SplitCommaAware(const std::string& input)
 {
     std::vector<std::string> items;
-    size_t start = 0, end = 0;
-    
-    while ((end = list.find(',', start)) != std::string::npos)
+    std::string current;
+    char quoteChar = 0;
+    int parenDepth = 0;
+
+    for (const char ch : input)
     {
-        std::string item = list.substr(start, end - start);
-        // 去除空格和引号
-        item.erase(0, item.find_first_not_of(" \t'\""));
-        item.erase(item.find_last_not_of(" \t'\"") + 1);
-        items.push_back(item);
-        start = end + 1;
+        if (quoteChar != 0)
+        {
+            current += ch;
+            if (ch == quoteChar)
+            {
+                quoteChar = 0;
+            }
+            continue;
+        }
+
+        if (ch == '\'' || ch == '"')
+        {
+            quoteChar = ch;
+            current += ch;
+            continue;
+        }
+
+        if (ch == '(')
+        {
+            ++parenDepth;
+        }
+        else if (ch == ')' && parenDepth > 0)
+        {
+            --parenDepth;
+        }
+
+        if (ch == ',' && parenDepth == 0)
+        {
+            items.push_back(Trim(current));
+            current.clear();
+            continue;
+        }
+
+        current += ch;
     }
-    
-    // 处理最后一项
-    std::string lastItem = list.substr(start);
-    lastItem.erase(0, lastItem.find_first_not_of(" \t'\""));
-    lastItem.erase(lastItem.find_last_not_of(" \t'\"") + 1);
-    items.push_back(lastItem);
-    
+
+    if (!Trim(current).empty())
+    {
+        items.push_back(Trim(current));
+    }
+
     return items;
 }
 
-// 根据列名和值创建新行数据
-nlohmann::json Statement::createRowFromValues(const std::vector<std::string>& colNames, const std::vector<std::string>& colValues)
+std::vector<std::string> SplitConditions(const std::string& input)
 {
-    if (colNames.size() != colValues.size())
+    std::vector<std::string> parts;
+    std::string current;
+    char quoteChar = 0;
+
+    for (std::size_t i = 0; i < input.size(); ++i)
     {
-        throw JsonDbException("Column count doesn't match value count");
-    }
-    
-    nlohmann::json newRow;
-    for (size_t i = 0; i < colNames.size(); i++)
-    {
-        const std::string& val = colValues[i];
-        if (val == "NULL")
+        const char ch = input[i];
+        if (quoteChar != 0)
         {
-            newRow[colNames[i]] = nullptr;
-        }
-        else if (isdigit(val[0]) || (val[0] == '-' && val.size() > 1 && isdigit(val[1])))
-        {
-            try
+            current += ch;
+            if (ch == quoteChar)
             {
-                if (val.find('.') != std::string::npos)
+                quoteChar = 0;
+            }
+            continue;
+        }
+
+        if (ch == '\'' || ch == '"')
+        {
+            quoteChar = ch;
+            current += ch;
+            continue;
+        }
+
+        if (i + 4 <= input.size())
+        {
+            const std::string token = ToLowerCopy(input.substr(i, 4));
+            const bool hasWordBoundaryBefore = (i == 0) || std::isspace(static_cast<unsigned char>(input[i - 1]));
+            const bool hasWordBoundaryAfter =
+                (i + 4 == input.size()) || std::isspace(static_cast<unsigned char>(input[i + 3]));
+            if (token == "and " && hasWordBoundaryBefore && hasWordBoundaryAfter)
+            {
+                parts.push_back(Trim(current));
+                current.clear();
+                i += 3;
+                continue;
+            }
+        }
+
+        current += ch;
+    }
+
+    if (!Trim(current).empty())
+    {
+        parts.push_back(Trim(current));
+    }
+
+    return parts;
+}
+
+nlohmann::json ParseScalarValue(const std::string& token)
+{
+    const std::string value = Trim(token);
+    if (value.empty())
+    {
+        return "";
+    }
+
+    if ((value.front() == '\'' && value.back() == '\'') || (value.front() == '"' && value.back() == '"'))
+    {
+        return value.substr(1, value.size() - 2);
+    }
+
+    const std::string lower = ToLowerCopy(value);
+    if (lower == "true")
+    {
+        return true;
+    }
+    if (lower == "false")
+    {
+        return false;
+    }
+    if (lower == "null")
+    {
+        return nullptr;
+    }
+
+    try
+    {
+        std::size_t parsed = 0;
+        const long long integerValue = std::stoll(value, &parsed);
+        if (parsed == value.size())
+        {
+            return integerValue;
+        }
+    }
+    catch (const std::exception&)
+    {
+    }
+
+    try
+    {
+        std::size_t parsed = 0;
+        const double floatingValue = std::stod(value, &parsed);
+        if (parsed == value.size())
+        {
+            return floatingValue;
+        }
+    }
+    catch (const std::exception&)
+    {
+    }
+
+    return value;
+}
+
+sql::jsondb::DataType DetectJsonType(const nlohmann::json& value)
+{
+    using sql::jsondb::DataType;
+
+    if (value.is_number_integer())
+    {
+        return DataType::INT;
+    }
+    if (value.is_number_float())
+    {
+        return DataType::FLOAT;
+    }
+    if (value.is_boolean())
+    {
+        return DataType::BOOLEAN;
+    }
+    if (value.is_string())
+    {
+        const std::string text = value.get<std::string>();
+        if (std::regex_match(text, std::regex(R"(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2})?)")))
+        {
+            return DataType::DATETIME;
+        }
+        return DataType::VARCHAR;
+    }
+    return DataType::UNKOWN;
+}
+
+bool CompareValues(const nlohmann::json& left, const std::string& op, const nlohmann::json& right)
+{
+    if (left.is_number() && right.is_number())
+    {
+        const double lhs = left.get<double>();
+        const double rhs = right.get<double>();
+        if (op == "=")
+        {
+            return lhs == rhs;
+        }
+        if (op == "!=")
+        {
+            return lhs != rhs;
+        }
+        if (op == ">")
+        {
+            return lhs > rhs;
+        }
+        if (op == "<")
+        {
+            return lhs < rhs;
+        }
+        if (op == ">=")
+        {
+            return lhs >= rhs;
+        }
+        if (op == "<=")
+        {
+            return lhs <= rhs;
+        }
+    }
+
+    if ((left.is_boolean() && right.is_boolean()) || (left.is_string() && right.is_string()) || (left.is_null() && right.is_null()))
+    {
+        if (op == "=")
+        {
+            return left == right;
+        }
+        if (op == "!=")
+        {
+            return left != right;
+        }
+    }
+
+    return false;
+}
+}
+
+namespace sql
+{
+    namespace jsondb
+    {
+        std::shared_ptr<Connection> Driver::connect(const std::string& dbPath, std::string user, std::string passwd)
+        {
+            return std::make_shared<Connection>(dbPath, std::move(user), std::move(passwd));
+        }
+
+        Connection::Connection(const std::string& dbPath, std::string user, std::string passwd)
+            : dbPath(dbPath)
+        {
+            if (!authenticate(std::move(user), std::move(passwd)))
+            {
+                throw JsonDbException("Authentication failed.");
+            }
+
+            const fs::path path(dbPath);
+            if (!fs::exists(path))
+            {
+                fs::create_directories(path);
+            }
+            else if (!fs::is_directory(path))
+            {
+                throw JsonDbException("Database path is not a directory: " + dbPath);
+            }
+        }
+
+        Connection::~Connection() noexcept
+        {
+            close();
+        }
+
+        void Connection::close() noexcept
+        {
+            closed = true;
+        }
+
+        std::shared_ptr<Statement> Connection::createStatement()
+        {
+            return std::make_shared<Statement>(shared_from_this());
+        }
+
+        std::shared_ptr<PreparedStatement> Connection::prepareStatement(const std::string& sql)
+        {
+            return std::make_shared<PreparedStatement>(shared_from_this(), sql);
+        }
+
+        void Connection::commit()
+        {
+        }
+
+        void Connection::rollback()
+        {
+        }
+
+        bool Connection::authenticate(std::string user, std::string passwd)
+        {
+            (void)user;
+            (void)passwd;
+            return true;
+        }
+
+        bool Connection::validateConnection() const
+        {
+            return !closed && fs::exists(dbPath);
+        }
+
+        bool Connection::tableExists(const std::string& tableName) const
+        {
+            return fs::exists(getTableFilePath(tableName));
+        }
+
+        std::vector<std::string> Connection::getColumnNames(const std::string& tableName) const
+        {
+            if (!tableExists(tableName))
+            {
+                throw JsonDbException("Table does not exist: " + tableName);
+            }
+
+            const std::string schemaPath = JsonSchemaFilePath(dbPath, tableName);
+            if (fs::exists(schemaPath))
+            {
+                std::ifstream schemaFile(schemaPath);
+                if (!schemaFile.is_open())
                 {
-                    newRow[colNames[i]] = std::stod(val);
+                    throw JsonDbException("Failed to open schema file: " + schemaPath);
+                }
+
+                nlohmann::json schemaJson;
+                schemaFile >> schemaJson;
+                return schemaJson.get<std::vector<std::string>>();
+            }
+
+            const std::vector<nlohmann::json> rows = getTableData(tableName);
+            if (rows.empty())
+            {
+                return {};
+            }
+
+            std::vector<std::string> columns;
+            for (auto it = rows.front().begin(); it != rows.front().end(); ++it)
+            {
+                columns.push_back(it.key());
+            }
+            return columns;
+        }
+
+        std::string Connection::getTableFilePath(const std::string& tableName) const
+        {
+            fs::path path(dbPath);
+            path /= tableName + ".json";
+            return path.string();
+        }
+
+        std::vector<nlohmann::json> Connection::getTableData(const std::string& tableName) const
+        {
+            const std::string tablePath = getTableFilePath(tableName);
+            if (!fs::exists(tablePath))
+            {
+                throw JsonDbException("Table does not exist: " + tableName);
+            }
+
+            std::ifstream file(tablePath);
+            if (!file.is_open())
+            {
+                throw JsonDbException("Failed to open table file: " + tablePath);
+            }
+
+            nlohmann::json tableData;
+            file >> tableData;
+            if (!tableData.is_array())
+            {
+                throw JsonDbException("Invalid table format for table: " + tableName);
+            }
+
+            return tableData.get<std::vector<nlohmann::json>>();
+        }
+
+        std::shared_ptr<ResultSet> Statement::executeQuery(const std::string& sql)
+        {
+            const std::string normalized = RemoveTrailingSemicolon(sql);
+            std::smatch match;
+            const std::regex selectPattern(
+                R"(^SELECT\s+(.*?)\s+FROM\s+([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?)(?:\s+WHERE\s+(.+))?$)",
+                std::regex::icase);
+            if (!std::regex_match(normalized, match, selectPattern))
+            {
+                throw JsonDbException("Invalid SELECT statement: " + sql);
+            }
+
+            const std::string tableName = extractTableName(match[2].str());
+            const std::string whereClause = match[3].matched ? Trim(match[3].str()) : "";
+            std::vector<std::string> selectedColumns = SplitCommaAware(match[1].str());
+            if (selectedColumns.empty())
+            {
+                throw JsonDbException("SELECT statement must include at least one column.");
+            }
+
+            const std::vector<nlohmann::json> tableRows = connection->getTableData(tableName);
+            std::vector<nlohmann::json> filteredRows;
+            for (const auto& row : tableRows)
+            {
+                if (whereClause.empty() || evaluateCondition(row, whereClause))
+                {
+                    filteredRows.push_back(row);
+                }
+            }
+
+            if (selectedColumns.size() == 1 && selectedColumns.front() == "*")
+            {
+                return std::make_shared<ResultSet>(filteredRows);
+            }
+
+            std::vector<nlohmann::json> projectedRows;
+            projectedRows.reserve(filteredRows.size());
+            for (const auto& row : filteredRows)
+            {
+                nlohmann::json projected = nlohmann::json::object();
+                for (const auto& column : selectedColumns)
+                {
+                    if (!row.contains(column))
+                    {
+                        throw JsonDbException("Column does not exist: " + column);
+                    }
+                    projected[column] = row.at(column);
+                }
+                projectedRows.push_back(std::move(projected));
+            }
+
+            return std::make_shared<ResultSet>(projectedRows, selectedColumns);
+        }
+
+        size_t Statement::executeUpdate(const std::string& sql)
+        {
+            const std::string normalized = RemoveTrailingSemicolon(sql);
+            std::smatch match;
+
+            const std::regex insertPattern(
+                R"(^INSERT\s+INTO\s+([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?)\s*\((.*?)\)\s+VALUES\s+(.+)$)",
+                std::regex::icase);
+            if (std::regex_match(normalized, match, insertPattern))
+            {
+                return executeInsertWithColumns(extractTableName(match[1].str()), match[2].str(), match[3].str());
+            }
+
+            const std::regex insertWithoutColumnsPattern(
+                R"(^INSERT\s+INTO\s+([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?)\s+VALUES\s+(.+)$)",
+                std::regex::icase);
+            if (std::regex_match(normalized, match, insertWithoutColumnsPattern))
+            {
+                return executeInsertWithoutColumns(extractTableName(match[1].str()), match[2].str());
+            }
+
+            const std::regex updatePattern(
+                R"(^UPDATE\s+([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?)\s+SET\s+(.+?)(?:\s+WHERE\s+(.+))?$)",
+                std::regex::icase);
+            if (std::regex_match(normalized, match, updatePattern))
+            {
+                return executeUpdateImpl(
+                    extractTableName(match[1].str()),
+                    match[2].str(),
+                    match[3].matched ? Trim(match[3].str()) : "");
+            }
+
+            const std::regex deletePattern(
+                R"(^DELETE\s+FROM\s+([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?)(?:\s+WHERE\s+(.+))?$)",
+                std::regex::icase);
+            if (std::regex_match(normalized, match, deletePattern))
+            {
+                return executeDeleteImpl(
+                    extractTableName(match[1].str()),
+                    match[2].matched ? Trim(match[2].str()) : "");
+            }
+
+            throw JsonDbException("Invalid mutation statement: " + sql);
+        }
+
+        bool Statement::executeCreate(const std::string& sql)
+        {
+            const std::string normalized = RemoveTrailingSemicolon(sql);
+            std::smatch match;
+            const std::regex createTablePattern(
+                R"(^CREATE\s+TABLE\s+([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?)\s*\((.*)\)$)",
+                std::regex::icase);
+            if (!std::regex_match(normalized, match, createTablePattern))
+            {
+                throw JsonDbException("Invalid CREATE TABLE statement: " + sql);
+            }
+
+            const std::string tableName = extractTableName(match[1].str());
+            const std::string tablePath = connection->getTableFilePath(tableName);
+            if (fs::exists(tablePath))
+            {
+                return false;
+            }
+
+            std::vector<std::string> columns;
+            for (const auto& definition : SplitCommaAware(match[2].str()))
+            {
+                std::stringstream line(definition);
+                std::string columnName;
+                line >> columnName;
+                if (!columnName.empty())
+                {
+                    columns.push_back(columnName);
+                }
+            }
+
+            std::ofstream tableFile(tablePath);
+            tableFile << "[]";
+
+            std::ofstream schemaFile(JsonSchemaFilePath(connection->getDbPath(), tableName));
+            schemaFile << std::setw(2) << nlohmann::json(columns);
+
+            return true;
+        }
+
+        bool Statement::execute(const std::string& sql)
+        {
+            const std::string trimmedSql = Trim(sql);
+            if (trimmedSql.empty())
+            {
+                throw JsonDbException("SQL statement is empty.");
+            }
+
+            std::string operation = ToLowerCopy(trimmedSql.substr(0, std::min<std::size_t>(trimmedSql.size(), 6)));
+            if (operation.rfind("select", 0) == 0)
+            {
+                return executeQuery(sql) != nullptr;
+            }
+            if (operation.rfind("create", 0) == 0)
+            {
+                return executeCreate(sql);
+            }
+            return executeUpdate(sql) > 0;
+        }
+
+        std::map<std::string, std::string> Statement::parseSetClause(const std::string& setClause)
+        {
+            std::map<std::string, std::string> updates;
+            for (const auto& assignment : SplitCommaAware(setClause))
+            {
+                const std::size_t equalsPos = assignment.find('=');
+                if (equalsPos == std::string::npos)
+                {
+                    throw JsonDbException("Invalid SET assignment: " + assignment);
+                }
+
+                const std::string column = trim(assignment.substr(0, equalsPos));
+                const std::string value = trim(assignment.substr(equalsPos + 1));
+                updates[column] = value;
+            }
+            return updates;
+        }
+
+        std::vector<std::string> Statement::parseList(const std::string& list)
+        {
+            std::string normalized = trim(list);
+            if (!normalized.empty() && normalized.front() == '(' && normalized.back() == ')')
+            {
+                normalized = normalized.substr(1, normalized.size() - 2);
+            }
+            return SplitCommaAware(normalized);
+        }
+
+        nlohmann::json Statement::createRowFromValues(
+            const std::vector<std::string>& colNames,
+            const std::vector<std::string>& colValues)
+        {
+            if (colNames.size() != colValues.size())
+            {
+                throw JsonDbException(
+                    "Column-value count mismatch. columns=" + std::to_string(colNames.size()) +
+                    ", values=" + std::to_string(colValues.size()));
+            }
+
+            nlohmann::json row = nlohmann::json::object();
+            for (std::size_t index = 0; index < colNames.size(); ++index)
+            {
+                row[colNames[index]] = parseValue(colValues[index]);
+            }
+            return row;
+        }
+
+        nlohmann::json Statement::readTableData(const std::string& tablePath)
+        {
+            std::ifstream file(tablePath);
+            if (!file.is_open())
+            {
+                throw JsonDbException("Failed to open table file: " + tablePath);
+            }
+
+            nlohmann::json tableData;
+            file >> tableData;
+            if (!tableData.is_array())
+            {
+                throw JsonDbException("Table data must be a JSON array: " + tablePath);
+            }
+            return tableData;
+        }
+
+        void Statement::writeTableData(const std::string& tablePath, const nlohmann::json& tableData)
+        {
+            std::ofstream outFile(tablePath, std::ios::trunc);
+            if (!outFile.is_open())
+            {
+                throw JsonDbException("Failed to write table file: " + tablePath);
+            }
+            outFile << std::setw(2) << tableData;
+        }
+
+        bool Statement::evaluateCondition(const nlohmann::json& row, const std::string& condition)
+        {
+            for (const auto& clause : SplitConditions(condition))
+            {
+                std::smatch match;
+                const std::regex conditionPattern(R"(^([A-Za-z0-9_]+)\s*(=|!=|>=|<=|>|<)\s*(.+)$)");
+                if (!std::regex_match(clause, match, conditionPattern))
+                {
+                    throw JsonDbException("Unsupported WHERE clause: " + clause);
+                }
+
+                const std::string column = match[1].str();
+                const std::string op = match[2].str();
+                const nlohmann::json expectedValue = parseValue(match[3].str());
+
+                if (!row.contains(column))
+                {
+                    throw JsonDbException("Column does not exist in WHERE clause: " + column);
+                }
+
+                if (!CompareValues(row.at(column), op, expectedValue))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        std::vector<std::string> Statement::splitValueGroups(const std::string& valuesStr)
+        {
+            std::vector<std::string> groups;
+            std::string current;
+            char quoteChar = 0;
+            int parenDepth = 0;
+
+            for (const char ch : valuesStr)
+            {
+                if (quoteChar == 0 && parenDepth == 0 && (std::isspace(static_cast<unsigned char>(ch)) || ch == ','))
+                {
+                    continue;
+                }
+
+                if (quoteChar != 0)
+                {
+                    current += ch;
+                    if (ch == quoteChar)
+                    {
+                        quoteChar = 0;
+                    }
+                    continue;
+                }
+
+                if (ch == '\'' || ch == '"')
+                {
+                    quoteChar = ch;
+                    current += ch;
+                    continue;
+                }
+
+                if (ch == '(')
+                {
+                    ++parenDepth;
+                }
+                else if (ch == ')' && parenDepth > 0)
+                {
+                    --parenDepth;
+                }
+
+                current += ch;
+                if (parenDepth == 0 && ch == ')')
+                {
+                    groups.push_back(trim(current));
+                    current.clear();
+                }
+            }
+
+            return groups;
+        }
+
+        std::vector<std::string> Statement::splitValueGroup(const std::string& valueGroup)
+        {
+            std::string trimmedGroup = trim(valueGroup);
+            if (!trimmedGroup.empty() && trimmedGroup.front() == '(' && trimmedGroup.back() == ')')
+            {
+                trimmedGroup = trimmedGroup.substr(1, trimmedGroup.size() - 2);
+            }
+            return SplitCommaAware(trimmedGroup);
+        }
+
+        nlohmann::json Statement::parseValue(const std::string& valueStr)
+        {
+            return ParseScalarValue(valueStr);
+        }
+
+        std::string Statement::trim(const std::string& s)
+        {
+            return Trim(s);
+        }
+
+        std::vector<std::string> Statement::split(const std::string& s, char delimiter)
+        {
+            std::vector<std::string> tokens;
+            std::stringstream stream(s);
+            std::string item;
+            while (std::getline(stream, item, delimiter))
+            {
+                tokens.push_back(trim(item));
+            }
+            return tokens;
+        }
+
+        std::string Statement::extractTableName(const std::string& tableSpec)
+        {
+            const std::size_t dotPos = tableSpec.find('.');
+            if (dotPos == std::string::npos)
+            {
+                return trim(tableSpec);
+            }
+            return trim(tableSpec.substr(dotPos + 1));
+        }
+
+        size_t Statement::executeUpdateImpl(
+            const std::string& table,
+            const std::string& setClause,
+            const std::string& whereClause)
+        {
+            if (!connection->tableExists(table))
+            {
+                throw JsonDbException("Table does not exist: " + table);
+            }
+
+            const std::string tablePath = connection->getTableFilePath(table);
+            nlohmann::json tableData = readTableData(tablePath);
+            const std::map<std::string, std::string> updates = parseSetClause(setClause);
+
+            size_t affectedRows = 0;
+            for (auto& row : tableData)
+            {
+                if (whereClause.empty() || evaluateCondition(row, whereClause))
+                {
+                    for (const auto& [column, value] : updates)
+                    {
+                        row[column] = parseValue(value);
+                    }
+                    ++affectedRows;
+                }
+            }
+
+            writeTableData(tablePath, tableData);
+            return affectedRows;
+        }
+
+        size_t Statement::executeDeleteImpl(const std::string& table, const std::string& whereClause)
+        {
+            if (!connection->tableExists(table))
+            {
+                throw JsonDbException("Table does not exist: " + table);
+            }
+
+            const std::string tablePath = connection->getTableFilePath(table);
+            nlohmann::json tableData = readTableData(tablePath);
+            nlohmann::json keptRows = nlohmann::json::array();
+            size_t affectedRows = 0;
+
+            for (const auto& row : tableData)
+            {
+                if (whereClause.empty() || evaluateCondition(row, whereClause))
+                {
+                    ++affectedRows;
                 }
                 else
                 {
-                    newRow[colNames[i]] = std::stoll(val);
+                    keptRows.push_back(row);
                 }
             }
-            catch (...) {
-                newRow[colNames[i]] = val;
-            }
-        }
-        else if (val == "true" || val == "false")
-        {
-            newRow[colNames[i]] = (val == "true");
-        }
-        else
-        {
-            newRow[colNames[i]] = val;
-        }
-    }
-    
-    return newRow;
-}
 
-// 读取表数据
-nlohmann::json Statement::readTableData(const std::string& tablePath)
-{
-    std::ifstream file(tablePath);
-    if (!file.is_open())
-    {
-        throw JsonDbException("Failed to open table file: " + tablePath);
-    }
-    
-    nlohmann::json tableData;
-    try
-    {
-        file >> tableData;
-    }
-    catch (const nlohmann::json::parse_error& e)
-    {
-        file.close();
-        throw JsonDbException("Failed to parse JSON file: " + std::string(e.what()));
-    }
-    file.close();
-    
-    if (!tableData.is_array())
-    {
-        throw JsonDbException("Invalid table format: table data should be an array");
-    }
-    
-    return tableData;
-}
+            writeTableData(tablePath, keptRows);
+            return affectedRows;
+        }
 
-// 写回表数据
-void Statement::writeTableData(const std::string& tablePath, const nlohmann::json& tableData)
-{
-    std::ofstream outFile(tablePath);
-    if (!outFile.is_open())
-    {
-        throw JsonDbException("Failed to open table file for writing: " + tablePath);
-    }
-    outFile << std::setw(4) << tableData << std::endl;
-    outFile.close();
-}
-
-// 实现UPDATE操作
-size_t Statement::executeUpdateImpl(const std::string& table, const std::string& setClause, const std::string& whereClause)
-{
-    // 检查表是否存在
-    if (!connection->tableExists(table))
-    {
-        throw JsonDbException("Table does not exist: " + table);
-    }
-    
-    // 读取表数据
-    std::string tablePath = connection->getTableFilePath(table);
-    nlohmann::json tableData = readTableData(tablePath);
-    
-    // 解析SET子句
-    std::map<std::string, std::string> updates = parseSetClause(setClause);
-    
-    // 更新匹配的行
-    size_t affectedRows = 0;
-    for (auto& row : tableData)
-    {
-        if (whereClause.empty() || evaluateCondition(row, whereClause))
+        size_t Statement::executeInsertWithColumns(
+            const std::string& table,
+            const std::string& columns,
+            const std::string& valuesStr)
         {
-            // 应用更新
-            for (const auto& [col, val] : updates)
+            if (!connection->tableExists(table))
             {
-                // 尝试转换值的类型
-                if (val == "NULL")
+                throw JsonDbException("Table does not exist: " + table);
+            }
+
+            const std::vector<std::string> columnNames = SplitCommaAware(columns);
+            const std::vector<std::string> valueGroups = splitValueGroups(valuesStr);
+            if (valueGroups.empty())
+            {
+                throw JsonDbException("INSERT statement does not include any values.");
+            }
+
+            const std::vector<std::string> schemaColumns = connection->getColumnNames(table);
+            if (!schemaColumns.empty())
+            {
+                for (const auto& column : columnNames)
                 {
-                    row[col] = nullptr;
-                }
-                else if (isdigit(val[0]) || (val[0] == '-' && val.size() > 1 && isdigit(val[1])))
-                {
-                    try
+                    if (std::find(schemaColumns.begin(), schemaColumns.end(), column) == schemaColumns.end())
                     {
-                        if (val.find('.') != std::string::npos)
+                        throw JsonDbException("Column does not exist in schema: " + column);
+                    }
+                }
+            }
+
+            const std::string tablePath = connection->getTableFilePath(table);
+            nlohmann::json tableData = readTableData(tablePath);
+            size_t insertedRows = 0;
+
+            for (const auto& valueGroup : valueGroups)
+            {
+                const std::vector<std::string> values = splitValueGroup(valueGroup);
+                tableData.push_back(createRowFromValues(columnNames, values));
+                ++insertedRows;
+            }
+
+            writeTableData(tablePath, tableData);
+            return insertedRows;
+        }
+
+        size_t Statement::executeInsertWithoutColumns(const std::string& table, const std::string& values)
+        {
+            const std::vector<std::string> columnNames = connection->getColumnNames(table);
+            if (columnNames.empty())
+            {
+                throw JsonDbException("Table schema is empty. INSERT without columns is not supported.");
+            }
+
+            const std::vector<std::string> valueGroups = splitValueGroups(values);
+            if (valueGroups.empty())
+            {
+                throw JsonDbException("INSERT statement does not include any values.");
+            }
+
+            const std::string tablePath = connection->getTableFilePath(table);
+            nlohmann::json tableData = readTableData(tablePath);
+            size_t insertedRows = 0;
+            for (const auto& valueGroup : valueGroups)
+            {
+                const std::vector<std::string> rowValues = splitValueGroup(valueGroup);
+                tableData.push_back(createRowFromValues(columnNames, rowValues));
+                ++insertedRows;
+            }
+
+            writeTableData(tablePath, tableData);
+            return insertedRows;
+        }
+
+        PreparedStatement::PreparedStatement(std::shared_ptr<Connection> conn, const std::string& sql)
+            : connection(std::move(conn)),
+              sql(sql),
+              parameters(std::count(sql.begin(), sql.end(), '?')),
+              stmt(connection)
+        {
+        }
+
+        void PreparedStatement::bindParameter(size_t index, const std::string& value)
+        {
+            if (index == 0 || index > parameters.size())
+            {
+                throw JsonDbException("PreparedStatement parameter index out of range.");
+            }
+            parameters[index - 1] = value;
+        }
+
+        std::string PreparedStatement::materializeSql() const
+        {
+            std::string query = sql;
+            std::size_t searchPos = 0;
+            for (const auto& parameter : parameters)
+            {
+                const std::size_t placeholder = query.find('?', searchPos);
+                if (placeholder == std::string::npos)
+                {
+                    throw JsonDbException("PreparedStatement placeholder count mismatch.");
+                }
+                query.replace(placeholder, 1, parameter);
+                searchPos = placeholder + parameter.size();
+            }
+            return query;
+        }
+
+        void PreparedStatement::setInt(size_t index, int value)
+        {
+            bindParameter(index, std::to_string(value));
+        }
+
+        void PreparedStatement::setFloat(size_t index, float value)
+        {
+            bindParameter(index, std::to_string(value));
+        }
+
+        void PreparedStatement::setString(size_t index, const std::string& value)
+        {
+            bindParameter(index, "'" + EscapeSqlString(value) + "'");
+        }
+
+        void PreparedStatement::setDateTime(size_t index, const std::string& value)
+        {
+            bindParameter(index, "'" + EscapeSqlString(value) + "'");
+        }
+
+        std::shared_ptr<ResultSet> PreparedStatement::executeQuery()
+        {
+            return stmt.executeQuery(materializeSql());
+        }
+
+        size_t PreparedStatement::executeUpdate()
+        {
+            return stmt.executeUpdate(materializeSql());
+        }
+
+        bool PreparedStatement::execute()
+        {
+            return stmt.execute(materializeSql());
+        }
+
+        ResultSet::ResultSet(const std::vector<nlohmann::json>& data, const std::vector<std::string>& preferredColumns)
+            : rows(data),
+              metaData(std::make_shared<ResultSetMetaData>())
+        {
+            if (!rows.empty())
+            {
+                const nlohmann::json& firstRow = rows.front();
+                if (!preferredColumns.empty())
+                {
+                    for (const auto& column : preferredColumns)
+                    {
+                        if (firstRow.contains(column))
                         {
-                            row[col] = std::stod(val);
+                            metaData->columns.push_back({column, DetectJsonType(firstRow.at(column))});
                         }
                         else
                         {
-                            row[col] = std::stoll(val);
+                            metaData->columns.push_back({column, DataType::UNKOWN});
                         }
                     }
-                    catch (...) {
-                        row[col] = val;
-                    }
-                }
-                else if (val == "true" || val == "false")
-                {
-                    row[col] = (val == "true");
                 }
                 else
                 {
-                    row[col] = val;
+                    for (auto it = firstRow.begin(); it != firstRow.end(); ++it)
+                    {
+                        metaData->columns.push_back({it.key(), DetectJsonType(it.value())});
+                    }
                 }
             }
-            affectedRows++;
-        }
-    }
-    
-    // 写回文件
-    writeTableData(tablePath, tableData);
-    
-    return affectedRows;
-}
-
-// 实现DELETE操作
-size_t Statement::executeDeleteImpl(const std::string& table, const std::string& whereClause)
-{
-    // 检查表是否存在
-    if (!connection->tableExists(table))
-    {
-        throw JsonDbException("Table does not exist: " + table);
-    }
-    
-    // 读取表数据
-    std::string tablePath = connection->getTableFilePath(table);
-    nlohmann::json tableData = readTableData(tablePath);
-    
-    // 过滤保留不匹配WHERE条件的行
-    nlohmann::json newTableData = nlohmann::json::array();
-    size_t affectedRows = 0;
-    
-    for (const auto& row : tableData)
-    {
-        if (!whereClause.empty() && evaluateCondition(row, whereClause))
-        {
-            affectedRows++;
-        }
-        else
-        {
-            newTableData.push_back(row);
-        }
-    }
-    
-    // 写回文件
-    writeTableData(tablePath, newTableData);
-    
-    return affectedRows;
-}
-
-// 辅助函数：拆分多值组（如 "('Bob',12), ('Alice',14)" → ["('Bob',12)", "('Alice',14)"]）
-std::vector<std::string> Statement::splitValueGroups(const std::string& valuesStr) {
-    std::vector<std::string> groups;
-    std::regex groupRegex(R"(\((?:[^()]+|\([^()]*\))*\))"); // 匹配单个值组
-    auto it = std::sregex_iterator(valuesStr.begin(), valuesStr.end(), groupRegex);
-    for (; it != std::sregex_iterator(); ++it) {
-        groups.push_back(it->str());
-    }
-    return groups;
-}
-
-// 辅助函数：拆分单个值组（如 "('Bob',12)" → ["'Bob'", "12"]）
-std::vector<std::string> Statement::splitValueGroup(const std::string& valueGroup) {
-
-    std::string trimmed = valueGroup.substr(1, valueGroup.size() - 2);
-    // 去除外层括号
-    
-    std::vector<std::string> values;
-    std::regex valueRegex(R"((?:"[^"]*"|'[^']*'|[^,]+))"); // 匹配带引号的字符串或非逗号值
-    auto it = std::sregex_iterator(trimmed.begin(), trimmed.end(), valueRegex);
-    for (; it != std::sregex_iterator(); ++it) {
-        std::string val = trim(it->str());
-        values.push_back(val);
-    }
-    return values;
-}
-
-// 辅助函数：解析值（去除引号、转换为对应类型）
-nlohmann::json Statement::parseValue(const std::string& valueStr) 
-{
-    std::string val = trim(valueStr);
-    // 处理字符串（单/双引号）
-    if ((val.front() == '\'' && val.back() == '\'') || (val.front() == '"' && val.back() == '"')) {
-        return val.substr(1, val.size() - 2); // 去除引号
-    }
-    // 处理数字（整数/浮点数）
-    if (val.find('.') != std::string::npos) {
-        return std::stod(val);
-    } else if (val == "true") {
-        return true;
-    } else if (val == "false") {
-        return false;
-    } else if (val == "null") {
-        return nullptr;
-    } else {
-        return std::stoi(val);
-    }
-}
-
-// 工具函数：去除字符串前后空格
-std::string Statement::trim(const std::string& str)
-{
-    std::string s = str; 
-    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) { return !std::isspace(ch); }));
-    s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) { return !std::isspace(ch); }).base(), s.end());
-    return s;
-}
-
-std::vector<std::string> sql::jsondb::Statement::split(const std::string& s, char delimiter)
-{
-    std::vector<std::string> tokens;
-    std::string token;
-    std::istringstream tokenStream(s);
-    while (std::getline(tokenStream, token, delimiter))
-    {
-        tokens.push_back(token);
-    }
-
-    return tokens;
-}
-
-
-// 实现带列名的INSERT操作
-size_t Statement::executeInsertWithColumns(const std::string& table, const std::string& columns, const std::string& valuesStr)
-{
-    // 1. 解析列名（如 "name, age" → ["name", "age"]）
-    std::vector<std::string> cols = split(columns, ',');
-    for (auto& col : cols)
-    {
-        col = trim(col); // 去除空格
-    }
-
-    // 2. 解析多值组（如 "('Bob',12), ('Alice',14)" → 拆分为单个值组）
-    std::vector<std::string> valueGroups = splitValueGroups(valuesStr);
-    if (valueGroups.empty())
-    {
-        throw JsonDbException("No values provided in INSERT statement");
-    }
-
-    // 3. 读取现有表数据（空数组则创建）
-    std::string tablePath = connection->getTableFilePath(table);
-    nlohmann::json tableData = readTableData(tablePath); // 封装读取JSON的函数
-
-    // 4. 遍历每个值组，生成行数据并插入
-    size_t affectedRows = 0;
-    for (const auto& valueGroup : valueGroups)
-    {
-        // 解析单个值组（如 "('Bob',12)" → ["'Bob'", "12"]）
-        std::vector<std::string> values = splitValueGroup(valueGroup);
-        if (values.size() != cols.size())
-        {
-            throw JsonDbException("Column-value count mismatch in INSERT");
-        }
-
-        // 生成一行数据（键值对：列名→值）
-        nlohmann::json row = nlohmann::json::object();
-        for (size_t i = 0; i < cols.size(); ++i)
-        {
-            row[cols[i]] = parseValue(values[i]); // 解析值（去除引号、转换类型）
-        }
-
-        tableData.push_back(row);
-        affectedRows++;
-    }
-
-    // 5. 写入更新后的数据
-    writeTableData(tablePath, tableData); // 封装写入JSON的函数
-    return affectedRows;
-}
-
-// 实现不带列名的INSERT操作
-size_t Statement::executeInsertWithoutColumns(const std::string& table, const std::string& values)
-{
-    // 检查表是否存在
-    if (!connection->tableExists(table))
-    {
-        throw JsonDbException("Table does not exist for INSERT without column names: " + table);
-    }
-    
-    // 获取表的列名
-    std::vector<std::string> columnNames = connection->getColumnNames(table);
-    
-    // 解析值
-    std::vector<std::string> colValues = parseList(values);
-    
-    // 创建新行数据
-    nlohmann::json newRow = createRowFromValues(columnNames, colValues);
-    
-    // 读取表数据
-    std::string tablePath = connection->getTableFilePath(table);
-    nlohmann::json tableData = readTableData(tablePath);
-    
-    // 添加新行
-    tableData.push_back(newRow);
-    
-    // 写回文件
-    writeTableData(tablePath, tableData);
-    
-    return 1; // INSERT操作通常只影响一行
-}
-
-// 辅助函数：评估WHERE条件
-bool Statement::evaluateCondition(const nlohmann::json& row, const std::string& condition)
-{
-    try
-    {
-        // 尝试匹配简单的条件格式：column operator value
-        std::regex conditionPattern(R"((\w+)\s*([=!<>]=?)\s*(.+))");
-        std::smatch condMatches;
-        if (std::regex_match(condition, condMatches, conditionPattern))
-        {
-            std::string colName = condMatches[1];
-            std::string op = condMatches[2];
-            std::string value = condMatches[3];
-
-            // 去除值两端的引号
-            value.erase(0, value.find_first_not_of(" \t'\""));
-            value.erase(value.find_last_not_of(" \t'\"") + 1);
-
-            // 检查列是否存在
-            if (row.contains(colName))
+            else
             {
-                // 根据操作符进行比较
-                if (op == "=")
+                for (const auto& column : preferredColumns)
                 {
-                    return (row[colName].is_number() && value == std::to_string(row[colName].get<double>())) ||
-                           (row[colName].is_string() && row[colName] == value);
-                }
-                else if (op == "!=")
-                {
-                    return !(row[colName].is_number() && value == std::to_string(row[colName].get<double>())) &&
-                           !(row[colName].is_string() && row[colName] == value);
-                }
-                else if (op == ">" && row[colName].is_number())
-                {
-                    return row[colName] > std::stod(value);
-                }
-                else if (op == "<" && row[colName].is_number())
-                {
-                    return row[colName] < std::stod(value);
-                }
-                else if (op == ">=" && row[colName].is_number())
-                {
-                    return row[colName] >= std::stod(value);
-                }
-                else if (op == "<=" && row[colName].is_number())
-                {
-                    return row[colName] <= std::stod(value);
+                    metaData->columns.push_back({column, DataType::UNKOWN});
                 }
             }
         }
-    }
-    catch (const std::exception& e)
-    {
-        // 条件解析错误，返回false
-    }
-    return false;
-}
 
-void sql::jsondb::PreparedStatement::bindParameter(size_t index, const std::string& value)
-{
-    parameters[index - 1] = value; // subtract 1 because parameters are 1-based index
-}
-
-void sql::jsondb::PreparedStatement::setInt(size_t index, int value)
-{
-    //convert int to string
-    parameters[index - 1] = std::to_string(value);
-}
-
-void sql::jsondb::PreparedStatement::setFloat(size_t index, float value)
-{
-    parameters[index - 1] = std::to_string(value);
-}
-
-void sql::jsondb::PreparedStatement::setString(size_t index, const std::string& value)
-{
-    parameters[index - 1] = value;
-}
-
-void sql::jsondb::PreparedStatement::setDateTime(size_t index, const std::string& value)
-{
-    parameters[index - 1] = value;
-}
-
-std::shared_ptr<ResultSet> sql::jsondb::PreparedStatement::executeQuery()
-{
-    // TODO: Implement executeQuery for PreparedStatement
-    auto input = this->sql;
-    size_t pos = 0;
-    int index = 0;
-    while ((pos = input.find('?')) != std::string::npos)
-    {
-        input.replace(pos, 1, parameters[index++]);
-    }
-
-    return stmt.executeQuery(input);
-}
-
-size_t sql::jsondb::PreparedStatement::executeUpdate()
-{
-    // TODO: Implement executeUpdate for PreparedStatement
-    auto input = this->sql;
-    size_t pos = 0;
-    int index = 0;
-    while ((pos = input.find('?')) != std::string::npos)
-    {
-        input.replace(pos, 1, parameters[index++]);
-    }
-
-    return stmt.executeUpdate(input);
-}
-
-bool sql::jsondb::PreparedStatement::execute()
-{
-    // TODO: Implement execute for PreparedStatement
-    auto input = this->sql;
-    size_t pos = 0;
-    int index = 0;
-    while ((pos = input.find('?')) != std::string::npos)
-    {
-        input.replace(pos, 1, parameters[index++]);
-    }
-
-    return stmt.execute(input);
-}
-
-bool sql::jsondb::ResultSet::is_date(const std::string& str)
-{
-    // using regex to match date format, e.g., 2022-01-01
-    // not perfect, but should work for most cases
-    std::regex datePattern(R"(\d{4}-\d{2}-\d{2})");
-    std::regex dateTimePattern(R"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})");
-    std::regex timePattern(R"(\d{2}:\d{2}:\d{2})");
-    return std::regex_match(str, datePattern) || std::regex_match(str, dateTimePattern) || std::regex_match(str, timePattern);
-}
-
-sql::jsondb::ResultSet::ResultSet(const std::vector<nlohmann::json>& data)
-{
-    currentIndex = 0;
-    rows = data;
-    // initialize metaData
-    metaData = std::make_shared<ResultSetMetaData>();
-    auto& columns = metaData->columns;
-    // TODO: Initialize metaData based on the structure of the rows
-    auto firstRow = rows.empty() ? nlohmann::json::object() : rows[0];
-    for (auto& [key, value] : firstRow.items())
-    {
-        if (value.is_number_integer())
+        bool ResultSet::is_date(const std::string& str)
         {
-            columns.push_back({ key, DataType::INT });
+            return std::regex_match(str, std::regex(R"(\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2})?)"));
         }
-        else if (value.is_number_float())
+
+        void ResultSet::ensureCurrentRow() const
         {
-            columns.push_back({ key, DataType::FLOAT });
+            if (!hasCurrentRow || currentIndex >= rows.size())
+            {
+                throw JsonDbException("ResultSet cursor is not positioned on a valid row.");
+            }
         }
-        else if (value.is_boolean())
+
+        bool ResultSet::next()
         {
-            columns.push_back({ key, DataType::BOOLEAN });
+            if (!hasCurrentRow)
+            {
+                if (rows.empty())
+                {
+                    return false;
+                }
+                currentIndex = 0;
+                hasCurrentRow = true;
+                return true;
+            }
+
+            if (currentIndex + 1 >= rows.size())
+            {
+                return false;
+            }
+
+            ++currentIndex;
+            return true;
         }
-        else if (value.is_string())
+
+        int ResultSet::getInt(const std::string& columnLabel)
         {
-            columns.push_back({ key, DataType::VARCHAR });
+            ensureCurrentRow();
+            return rows.at(currentIndex).at(columnLabel).get<int>();
         }
-        else if (is_date(value.get<std::string>()))
+
+        float ResultSet::getFloat(const std::string& columnLabel)
         {
-            columns.push_back({ key, DataType::DATETIME });
+            ensureCurrentRow();
+            return rows.at(currentIndex).at(columnLabel).get<float>();
         }
-        else
+
+        std::string ResultSet::getString(const std::string& columnLabel)
         {
-            columns.push_back({ key, DataType::UNKOWN });
+            ensureCurrentRow();
+            return rows.at(currentIndex).at(columnLabel).get<std::string>();
+        }
+
+        bool ResultSet::getBoolean(const std::string& columnLabel)
+        {
+            ensureCurrentRow();
+            return rows.at(currentIndex).at(columnLabel).get<bool>();
+        }
+
+        std::string ResultSet::getDateTime(const std::string& columnLabel)
+        {
+            ensureCurrentRow();
+            return rows.at(currentIndex).at(columnLabel).get<std::string>();
+        }
+
+        std::string ResultSetMetaData::getColumnName(size_t index) const
+        {
+            return columns.at(index).first;
+        }
+
+        DataType ResultSetMetaData::getColumnType(size_t index) const
+        {
+            return columns.at(index).second;
+        }
+
+        std::vector<std::string> DatabaseMetaData::getTables()
+        {
+            std::vector<std::string> tables;
+            for (const auto& entry : fs::directory_iterator(connection->getDbPath()))
+            {
+                if (!entry.is_regular_file() || entry.path().extension() != ".json")
+                {
+                    continue;
+                }
+
+                const std::string stem = entry.path().stem().string();
+                if (stem.size() >= 7 && stem.substr(stem.size() - 7) == ".schema")
+                {
+                    continue;
+                }
+                tables.push_back(stem);
+            }
+            return tables;
         }
     }
-
-}
-
-bool ResultSet::next()
-{
-    if (currentIndex < rows.size())
-    {
-        currentIndex++;
-        return true;
-    }
-    else return false;
-}
-
-int sql::jsondb::ResultSet::getInt(const std::string& columnLabel)
-{
-    return rows[currentIndex][columnLabel].get<int>();
-}
-
-float sql::jsondb::ResultSet::getFloat(const std::string& columnLabel)
-{
-    return rows[currentIndex][columnLabel].get<float>();
-}
-
-std::string sql::jsondb::ResultSet::getString(const std::string& columnLabel)
-{
-    return rows[currentIndex][columnLabel].get<std::string>();
-}
-
-bool sql::jsondb::ResultSet::getBoolean(const std::string& columnLabel)
-{
-    return rows[currentIndex][columnLabel].get<bool>();
-}
-
-std::string sql::jsondb::ResultSet::getDateTime(const std::string& columnLabel)
-{
-    return rows[currentIndex][columnLabel].get<std::string>();
-}
-
-sql::jsondb::ResultSetMetaData::ResultSetMetaData()
-{
-    columns = std::vector<std::pair<std::string, DataType>>();
-}
-
-std::string sql::jsondb::ResultSetMetaData::getColumnName(size_t index) const
-{
-    return columns[index].first;
-}
-
-DataType sql::jsondb::ResultSetMetaData::getColumnType(size_t index) const
-{
-    return columns[index].second;
-}
-
-std::vector<std::string> sql::jsondb::DatabaseMetaData::getTables()
-{
-    auto dbPath = connection->getDbPath();
-    std::vector<std::string> tables;
-    for (auto& file : std::filesystem::directory_iterator(dbPath))
-    {
-        if (file.is_regular_file() && file.path().extension() == ".json")
-        {
-            tables.push_back(file.path().stem().string());
-        }
-    }
-
-    return tables;
 }
